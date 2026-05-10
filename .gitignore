@@ -1,0 +1,27 @@
+# Node.js
+node_modules/
+.env
+.env.*
+
+# ASP.NET Core
+bin/
+obj/
+appsettings.*.json
+*.user
+*.vspscc
+*.vssscc
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# System/IDE
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
