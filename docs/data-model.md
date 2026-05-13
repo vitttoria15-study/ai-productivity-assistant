@@ -1,145 +1,384 @@
 # Data Model
 
-## Entities
+## Overview
 
-### journal_entries
+This document describes the planned data model for the AI Productivity Assistant PoC.
 
-Stores raw user journal text. One entry per submission.
+The application uses SQLite as a lightweight local database. The model is intentionally simple and optimized for:
 
-| Column | Type | Constraints | Notes |
-|--------|------|-------------|-------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | |
-| `entry_text` | TEXT | NOT NULL | Free-form journal text as entered by the user |
-| `created_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | ISO 8601 UTC |
+* single-user usage,
+* fast development,
+* clear MVP behavior,
+* demo readiness.
 
----
+The model supports:
 
-### ai_extractions
+* journal entries,
+* AI extraction results,
+* tasks,
+* blockers,
+* contextual AI chat.
 
-Stores the structured AI output for a journal entry. One-to-one with `journal_entries`.
+The MVP intentionally avoids:
 
-| Column | Type | Constraints | Notes |
-|--------|------|-------------|-------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | |
-| `journal_entry_id` | INTEGER | NOT NULL, FK → `journal_entries.id` | One-to-one relationship |
-| `completed_tasks` | TEXT | NOT NULL, DEFAULT `'[]'` | JSON array of strings |
-| `blockers` | TEXT | NOT NULL, DEFAULT `'[]'` | JSON array of strings |
-| `new_tasks` | TEXT | NOT NULL, DEFAULT `'[]'` | JSON array of `{title, priority}` objects |
-| `summary` | TEXT | NOT NULL, DEFAULT `''` | Plain text, 1–3 sentences |
-| `created_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | ISO 8601 UTC |
-
-> Arrays stored as JSON text. SQLite's `json_each()` / `json_extract()` can query them if needed, but for MVP, deserialize in the application layer.
+* users/accounts,
+* roles and permissions,
+* multi-tenancy,
+* complex workflow engines,
+* enterprise-scale data modeling.
 
 ---
 
-### tasks
+# Core Entities
 
-Stores individual tasks — both AI-extracted and manually created.
+## 1. JournalEntry
 
-| Column | Type | Constraints | Notes |
-|--------|------|-------------|-------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | |
-| `title` | TEXT | NOT NULL | Task description |
-| `priority` | TEXT | NOT NULL, DEFAULT `'medium'` | `'high'`, `'medium'`, `'low'` |
-| `status` | TEXT | NOT NULL, DEFAULT `'pending'` | `'pending'`, `'done'` |
-| `source` | TEXT | NOT NULL, DEFAULT `'manual'` | `'ai'`, `'manual'` |
-| `journal_entry_id` | INTEGER | NULL, FK → `journal_entries.id` | Non-null only when `source = 'ai'` |
-| `created_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | ISO 8601 UTC |
-| `updated_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | ISO 8601 UTC; update on every write |
+Represents a natural-language progress or journal entry submitted by the user.
 
----
+### Purpose
 
-### chat_messages *(optional for MVP)*
+Journal entries are the primary input for AI extraction.
 
-Persists chat conversation history. For the MVP, in-memory (React state) is acceptable. Include this table only if time allows in Week 2.
+### Fields
 
-| Column | Type | Constraints | Notes |
-|--------|------|-------------|-------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | |
-| `role` | TEXT | NOT NULL, CHECK `role IN ('user','assistant')` | |
-| `content` | TEXT | NOT NULL | Message text |
-| `created_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | ISO 8601 UTC |
+| Field     | Type     | Required | Notes                    |
+| --------- | -------- | -------- | ------------------------ |
+| Id        | integer  | Yes      | Primary key              |
+| Text      | text     | Yes      | Raw journal entry text   |
+| CreatedAt | datetime | Yes      | Entry creation timestamp |
 
----
+### Example
 
-## Relationships
-
-```
-journal_entries  (1) ─────── (0..1) ai_extractions
-journal_entries  (1) ─────── (0..N) tasks           [tasks.source = 'ai']
+```json
+{
+  "id": 1,
+  "text": "Today I finished onboarding, but Dial API setup is still blocked.",
+  "createdAt": "2026-05-10T18:00:00Z"
+}
 ```
 
-- A journal entry always has at most one extraction (created on first successful AI call).
-- Manual tasks (`source = 'manual'`) have `journal_entry_id = NULL`.
-- AI-sourced tasks have `journal_entry_id` pointing to the originating entry.
+---
+
+## 2. TaskItem
+
+Represents a task managed by the user or extracted by AI from a journal entry.
+
+### Purpose
+
+Tasks are the main actionable items in the application.
+
+### Fields
+
+| Field          | Type     | Required | Notes                                |
+| -------------- | -------- | -------- | ------------------------------------ |
+| Id             | integer  | Yes      | Primary key                          |
+| Title          | text     | Yes      | Task title                           |
+| Description    | text     | No       | Optional details                     |
+| Priority       | text     | Yes      | low, medium, high                    |
+| Status         | text     | Yes      | todo, in_progress, blocked, done     |
+| Source         | text     | Yes      | manual or ai                         |
+| JournalEntryId | integer  | No       | Linked journal entry if AI-generated |
+| CreatedAt      | datetime | Yes      | Creation timestamp                   |
+| UpdatedAt      | datetime | No       | Last update timestamp                |
+| CompletedAt    | datetime | No       | Completion timestamp                 |
+
+### Example
+
+```json
+{
+  "id": 1,
+  "title": "Complete project presentation",
+  "description": null,
+  "priority": "high",
+  "status": "todo",
+  "source": "ai",
+  "journalEntryId": 1,
+  "createdAt": "2026-05-10T18:05:00Z",
+  "updatedAt": null,
+  "completedAt": null
+}
+```
 
 ---
 
-## SQLite Schema (DDL)
+## 3. AIExtraction
+
+Represents the structured AI analysis result for a journal entry.
+
+### Purpose
+
+Stores the raw AI extraction result so the application can display and inspect what the model extracted from the journal entry.
+
+### Fields
+
+| Field              | Type     | Required | Notes                     |
+| ------------------ | -------- | -------- | ------------------------- |
+| Id                 | integer  | Yes      | Primary key               |
+| JournalEntryId     | integer  | Yes      | Related journal entry     |
+| Summary            | text     | No       | AI-generated summary      |
+| CompletedTasksJson | text     | No       | JSON array stored as text |
+| NewTasksJson       | text     | No       | JSON array stored as text |
+| BlockersJson       | text     | No       | JSON array stored as text |
+| PrioritiesJson     | text     | No       | JSON array stored as text |
+| RawResponseJson    | text     | No       | Full raw AI response      |
+| CreatedAt          | datetime | Yes      | Extraction timestamp      |
+
+### Notes
+
+SQLite does not require a dedicated JSON column type for this PoC. JSON arrays can be stored as text.
+
+This keeps the schema simple and avoids unnecessary normalization for MVP.
+
+### Example
+
+```json
+{
+  "id": 1,
+  "journalEntryId": 1,
+  "summary": "User completed onboarding but is blocked by Dial API setup.",
+  "completedTasksJson": "[\"Finished onboarding\"]",
+  "newTasksJson": "[{\"title\":\"Finish project presentation\",\"priority\":\"high\"}]",
+  "blockersJson": "[\"Dial API setup\"]",
+  "prioritiesJson": "[\"Project presentation\"]",
+  "createdAt": "2026-05-10T18:05:00Z"
+}
+```
+
+---
+
+## 4. ChatMessage
+
+Represents an in-memory or optionally persisted chat message between the user and the AI assistant.
+
+### Purpose
+
+For the MVP, chat history may remain in React state only.
+
+If persistence is needed later, this entity can be used.
+
+### Fields
+
+| Field     | Type     | Required | Notes             |
+| --------- | -------- | -------- | ----------------- |
+| Id        | integer  | Yes      | Primary key       |
+| Role      | text     | Yes      | user or assistant |
+| Message   | text     | Yes      | Message content   |
+| CreatedAt | datetime | Yes      | Message timestamp |
+
+### MVP Note
+
+Persisting chat history is optional and not required for the first demo.
+
+---
+
+# Relationships
+
+```text
+JournalEntry 1 ─── 0..1 AIExtraction
+JournalEntry 1 ─── 0..n TaskItem
+TaskItem     n ─── 0..1 JournalEntry
+```
+
+Optional future relationship:
+
+```text
+ChatMessage can be stored independently if chat persistence is added later.
+```
+
+---
+
+# SQLite Schema Draft
+
+## journal_entries
 
 ```sql
 CREATE TABLE journal_entries (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    entry_text TEXT    NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE ai_extractions (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
-    completed_tasks  TEXT    NOT NULL DEFAULT '[]',
-    blockers         TEXT    NOT NULL DEFAULT '[]',
-    new_tasks        TEXT    NOT NULL DEFAULT '[]',
-    summary          TEXT    NOT NULL DEFAULT '',
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE tasks (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    title            TEXT    NOT NULL,
-    priority         TEXT    NOT NULL DEFAULT 'medium'
-                             CHECK(priority IN ('high', 'medium', 'low')),
-    status           TEXT    NOT NULL DEFAULT 'pending'
-                             CHECK(status IN ('pending', 'done')),
-    source           TEXT    NOT NULL DEFAULT 'manual'
-                             CHECK(source IN ('ai', 'manual')),
-    journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE SET NULL,
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
-);
-
--- Optional: include only if chat persistence is implemented
-CREATE TABLE chat_messages (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    role       TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
-    content    TEXT    NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 ```
 
 ---
 
-## EF Core Notes
-
-- Use `EnsureCreated()` for PoC setup — avoids migration overhead.
-- Store array columns (`completed_tasks`, `blockers`, `new_tasks`) as `string` in C# entities and serialize/deserialize with `System.Text.Json` in the service layer.
-- SQLite stores `TEXT` for all date columns; use `DateTime` in C# and configure EF Core to use ISO 8601 strings.
-- `updated_at` must be set explicitly in the repository on every update; SQLite triggers are an alternative but add complexity.
-
----
-
-## Future Extension: Vector Storage for RAG
-
-When adding lightweight RAG, extend the schema with:
+## ai_extractions
 
 ```sql
-CREATE TABLE journal_embeddings (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
-    chunk_text       TEXT    NOT NULL,
-    embedding        BLOB    NOT NULL,   -- float32 array serialized as bytes
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE ai_extractions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    journal_entry_id INTEGER NOT NULL,
+    summary TEXT,
+    completed_tasks_json TEXT,
+    new_tasks_json TEXT,
+    blockers_json TEXT,
+    priorities_json TEXT,
+    raw_response_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id) ON DELETE CASCADE
 );
 ```
 
-Or replace with an embedded vector store (Chroma, sqlite-vss). No changes to `journal_entries`, `tasks`, or `ai_extractions` are required.
+---
+
+## tasks
+
+```sql
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    priority TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'todo',
+    source TEXT NOT NULL DEFAULT 'manual',
+    journal_entry_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    completed_at TEXT,
+    FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id) ON DELETE SET NULL,
+    CHECK (priority IN ('low', 'medium', 'high')),
+    CHECK (status IN ('todo', 'in_progress', 'blocked', 'done')),
+    CHECK (source IN ('manual', 'ai'))
+);
+```
+
+---
+
+## chat_messages Optional
+
+```sql
+CREATE TABLE chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    CHECK (role IN ('user', 'assistant'))
+);
+```
+
+---
+
+# Entity Usage by Feature
+
+| Feature               | Entities Used                        |
+| --------------------- | ------------------------------------ |
+| Submit journal entry  | JournalEntry, AIExtraction, TaskItem |
+| View journal history  | JournalEntry, AIExtraction           |
+| View task list        | TaskItem                             |
+| Manual task CRUD      | TaskItem                             |
+| AI chat with context  | TaskItem, JournalEntry, AIExtraction |
+| n8n reminder workflow | JournalEntry                         |
+| Weekly summaries      | JournalEntry, AIExtraction, TaskItem |
+
+---
+
+# MVP Data Decisions
+
+## Keep Task Model Simple
+
+The MVP should not introduce complex project hierarchy, labels, dependencies, subtasks, or recurring tasks.
+
+These can be added later if needed.
+
+---
+
+## Store AI Extraction as JSON Text
+
+AI responses can vary slightly. Storing extracted arrays as JSON text allows fast iteration without over-normalizing the schema.
+
+For the MVP, this is acceptable and easier to implement.
+
+---
+
+## Single-User Assumption
+
+No `users` table is needed for the MVP.
+
+All data is assumed to belong to one local user.
+
+---
+
+## Chat Persistence Is Optional
+
+For the MVP, chat messages may remain in frontend memory.
+
+Persisting chat history can be added later if it improves the demo or final experience.
+
+---
+
+# Future Data Model Extensions
+
+Possible future entities:
+
+## Project
+
+Could support grouping tasks by area:
+
+* Work,
+* Learning,
+* Personal,
+* Health.
+
+Example fields:
+
+* Id,
+* Name,
+* Description,
+* CreatedAt.
+
+---
+
+## Tag
+
+Could support flexible categorization.
+
+Example fields:
+
+* Id,
+* Name.
+
+---
+
+## TaskDependency
+
+Could support dependency-aware prioritization.
+
+Example fields:
+
+* TaskId,
+* DependsOnTaskId.
+
+---
+
+## JournalEmbedding
+
+Could support future RAG/memory functionality.
+
+Example fields:
+
+* Id,
+* JournalEntryId,
+* EmbeddingVector,
+* CreatedAt.
+
+---
+
+# Future RAG / Memory Extension
+
+RAG is not part of the MVP data model.
+
+If lightweight RAG is added later, the system may store embeddings for journal entries and use semantic search to answer historical questions.
+
+Possible future questions:
+
+* “What blockers repeated this month?”
+* “What did I complete this week?”
+* “What topics consumed most of my time recently?”
+
+Potential storage options:
+
+* SQLite vector extension,
+* pgvector,
+* Qdrant,
+* ChromaDB.
+
+This should be implemented only after the core MVP is stable.

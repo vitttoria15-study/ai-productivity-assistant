@@ -2,81 +2,219 @@
 
 ## Project Vision
 
-AI Productivity Assistant is a single-user, AI-powered productivity tool that turns a developer's free-form daily notes into structured, actionable tasks. The core premise: instead of maintaining a task list by hand, the user writes a journal update and the AI does the extraction.
+AI Productivity Assistant is a lightweight AI-powered productivity companion designed to help users organize tasks, priorities, blockers, and progress through natural-language interaction.
 
-The project is a 3-week Proof of Concept (PoC) built as part of the EPAM AI Upskilling Program (May 2026). It demonstrates practical LLM integration in a real productivity workflow using EPAM Dial API as the AI gateway.
+The application focuses on reducing mental overload by allowing users to write free-form journal or progress updates while the AI extracts structured information and helps organize work.
 
----
-
-## Problem Statement
-
-Knowledge workers write daily progress notes, stand-up updates, or end-of-day reflections in free-form text. Extracting structured tasks, identifying blockers, and tracking priorities from that text is repetitive, error-prone, and often skipped entirely. The result: lost context, poor follow-through, and no record of what was accomplished.
-
-The insight: this extraction is exactly what LLMs are good at. A well-prompted model can reliably parse "Today I finished onboarding, but auth is blocked; tomorrow I need to prep the presentation" into a machine-readable structure with zero manual tagging.
+The project is designed as a practical Proof of Concept (PoC) demonstrating how Large Language Models (LLMs) can support everyday productivity workflows.
 
 ---
 
-## User Persona
+# Problem Statement
 
-**Solo developer / knowledge worker (single user)**
+People often manage tasks, learning goals, work items, reminders, and personal plans across multiple disconnected places:
 
-- Works on several tasks simultaneously across multiple contexts
-- Writes informal daily progress notes but doesn't always process them into a task list
-- Wants clarity on what's done, what's blocked, and what needs attention next
-- Needs a tool lightweight enough to use without discipline or setup overhead
-- Does not want to learn another complex productivity system
+* notes,
+* chats,
+* sticky notes,
+* spreadsheets,
+* mental checklists.
 
----
+This creates several problems:
 
-## MVP Scope
+* tasks become difficult to prioritize,
+* blockers are forgotten,
+* progress is hard to track,
+* context switching increases cognitive load,
+* journal notes remain unstructured and difficult to revisit.
 
-The MVP delivers these capabilities end-to-end, in priority order:
+Traditional task management tools require users to manually structure and maintain information.
 
-| Priority | Capability |
-|----------|------------|
-| P0 | Journal entry form → AI extraction (completed tasks, blockers, new tasks, summary) |
-| P0 | EPAM Dial API integration for all AI features |
-| P1 | Task list: view, create, edit, mark done, delete |
-| P1 | n8n scheduled reminder workflow (Week 1 program requirement) |
-| P2 | Basic chat assistant with task + journal context awareness |
-| P3 | Journal history (view past entries) |
-
-The May 15 intermediate demo requires only P0: working journal submission + AI extraction result displayed in the UI.
+The goal of this project is to explore how AI can simplify productivity management by transforming natural-language journal entries into structured and actionable information.
 
 ---
 
-## Out of Scope (MVP)
+# Proposed Solution
 
-- User authentication, login, or sessions
-- Multi-user or team collaboration
-- Role-based access control (RBAC) or tenancy
-- Cloud hosting or production deployment
-- Real-time updates / WebSockets
-- Mobile-responsive design
-- Integrations with external tools (Jira, Notion, GitHub, Slack)
-- Email delivery (n8n notification can use execution log or webhook)
-- Advanced analytics, dashboards, or charts
-- Task dependencies or project hierarchy
+The application allows users to write free-form journal or progress updates.
+
+Example:
+
+```text
+Today I completed onboarding, but backend authentication is still blocked.
+Tomorrow I need to finish the project presentation.
+```
+
+The AI assistant analyzes the text and extracts:
+
+* completed tasks,
+* blockers,
+* new tasks,
+* priorities,
+* summaries.
+
+The extracted information is then organized into a lightweight productivity dashboard.
+
+The system also supports contextual AI interactions, allowing users to ask questions such as:
+
+* “What should I focus on tomorrow?”
+* “What blockers are currently active?”
+* “Summarize my progress this week.”
 
 ---
 
-## Planned Future Enhancements
+# Target Users
 
-### Lightweight RAG / AI Memory
+The MVP is designed primarily for:
 
-When built, this adds semantic search over historical journal entries:
+* developers,
+* students,
+* learners,
+* individual contributors,
+* knowledge workers.
 
-- Recurring blocker detection ("this issue appeared 3 times this month")
-- Long-term productivity pattern analysis
-- AI-generated weekly/monthly summaries from historical entries
-- Context injection: top-k similar past entries included in chat and extraction prompts
+The application is intentionally designed as a single-user productivity assistant.
 
-Potential implementation path: SQLite with `sqlite-vss` extension, or an embedded vector store such as Chroma or FAISS. No architecture change to the API or frontend is required — only the backend's `DialService` and storage layer expand.
+---
 
-### Smart Prioritization
+# MVP Scope
 
-AI recommends which task to focus on next, factoring in deadline signals, recurrence, and blocker history.
+The MVP focuses on journal-driven productivity assistance.
 
-### Summary Reports
+The core MVP features include:
 
-Automated weekly/monthly summaries generated from the journal corpus, surfaced as a dedicated view.
+## Journal Input
+
+Users can submit natural-language journal/progress entries.
+
+---
+
+## AI Extraction
+
+The AI extracts structured information from journal entries:
+
+* completed tasks,
+* blockers,
+* new tasks,
+* priorities,
+* summaries.
+
+---
+
+## Task Management
+
+Users can:
+
+* view tasks,
+* manually create tasks,
+* edit tasks,
+* delete tasks,
+* mark tasks as completed.
+
+---
+
+## Context-Aware AI Chat
+
+The AI assistant can answer lightweight contextual questions using:
+
+* current tasks,
+* recent journal entries,
+* blockers,
+* priorities.
+
+The MVP uses lightweight prompt context injection instead of full RAG.
+
+---
+
+## Productivity Summaries
+
+The system can generate:
+
+* daily summaries,
+* weekly summaries,
+* blocker overviews,
+* progress insights.
+
+---
+
+# Technical Direction
+
+The planned technology stack:
+
+| Layer          | Technology           |
+| -------------- | -------------------- |
+| Frontend       | React                |
+| Backend        | ASP.NET Core Web API |
+| Database       | SQLite               |
+| AI Integration | EPAM Dial API        |
+| Automation     | n8n                  |
+
+---
+
+# Architecture Overview
+
+```text
+React Frontend
+    ↓
+ASP.NET Core Web API
+    ↓
+EPAM Dial API (LLM)
+    ↓
+SQLite Database
+```
+
+n8n is used separately for low-code automation workflows and reminder flows.
+
+---
+
+# Out of Scope
+
+The MVP intentionally excludes:
+
+* authentication,
+* multi-user collaboration,
+* enterprise planning features,
+* advanced Kanban boards,
+* autonomous AI agents,
+* complex orchestration systems,
+* production-scale infrastructure,
+* full Retrieval-Augmented Generation (RAG) pipelines.
+
+The goal is to maintain a realistic and achievable MVP scope for a 3-week PoC project.
+
+---
+
+# Future Enhancements
+
+Possible future enhancements include:
+
+* lightweight RAG/memory,
+* semantic search across journal history,
+* recurring blocker analysis,
+* long-term productivity analytics,
+* voice input,
+* gamification,
+* productivity scoring,
+* habit tracking.
+
+These features are considered optional post-MVP improvements.
+
+---
+
+# Project Goals
+
+The project aims to demonstrate:
+
+* practical LLM integration,
+* AI-assisted productivity workflows,
+* structured information extraction,
+* contextual AI assistance,
+* lightweight AI-powered user experiences.
+
+The project prioritizes:
+
+* simplicity,
+* clean architecture,
+* realistic implementation scope,
+* demo-ready functionality,
+* incremental delivery.

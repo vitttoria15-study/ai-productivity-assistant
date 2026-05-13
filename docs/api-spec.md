@@ -1,322 +1,444 @@
 # API Specification
 
-**Base URL (local development):** `http://localhost:5000`
+## Overview
 
-All requests and responses use `Content-Type: application/json`.  
-All timestamps are ISO 8601 UTC (e.g., `"2026-05-12T09:30:00Z"`).
+This document describes the planned REST API for the AI Productivity Assistant PoC.
+
+The API is designed for:
+
+* single-user usage,
+* lightweight AI-assisted workflows,
+* simple task and journal management,
+* integration with EPAM Dial API.
+
+The API intentionally avoids:
+
+* authentication,
+* multi-user support,
+* enterprise-level complexity,
+* advanced orchestration.
 
 ---
 
-## Journal Endpoints
+# Base URL
 
-### POST /api/journal
+```text
+/api
+```
 
-Submit a journal entry. Triggers AI extraction synchronously and returns the result.
+---
 
-**Request body:**
+# Architecture Context
+
+```text
+React Frontend
+    ↓
+ASP.NET Core Web API
+    ↓
+EPAM Dial API (LLM)
+    ↓
+SQLite Database
+```
+
+---
+
+# Core API Goals
+
+The backend should:
+
+* accept journal entries,
+* send prompts to the LLM,
+* extract structured information,
+* persist tasks/journal data,
+* provide contextual AI responses,
+* support lightweight productivity workflows.
+
+---
+
+# AI Extraction Response Shape
+
+The AI should always return structured JSON in the following format:
+
 ```json
 {
-  "entry_text": "Today I finished onboarding, but backend authentication is still blocked. Tomorrow I need to complete the project presentation."
+  "completed_tasks": [
+    "string"
+  ],
+  "new_tasks": [
+    {
+      "title": "string",
+      "priority": "low | medium | high"
+    }
+  ],
+  "blockers": [
+    "string"
+  ],
+  "priorities": [
+    "string"
+  ],
+  "summary": "string"
 }
 ```
 
-**Response — 201 Created:**
+---
+
+# Endpoints
+
+---
+
+# 1. Submit Journal Entry
+
+## POST `/api/journal`
+
+Accepts a natural-language journal/progress entry, sends it to the AI model, extracts structured information, stores the result, and returns the AI analysis.
+
+---
+
+## Request
+
 ```json
 {
-  "journal_entry_id": 1,
-  "entry_text": "Today I finished onboarding, but backend authentication is still blocked. Tomorrow I need to complete the project presentation.",
-  "created_at": "2026-05-12T09:30:00Z",
-  "extraction": {
+  "text": "Today I finished onboarding, but backend authentication is still blocked. Tomorrow I need to complete the presentation."
+}
+```
+
+---
+
+## Backend Flow
+
+```text
+Receive Journal Entry
+→ Send prompt to EPAM Dial API
+→ Receive structured JSON
+→ Save journal entry
+→ Save extracted tasks/blockers
+→ Return response to frontend
+```
+
+---
+
+## Response
+
+```json
+{
+  "journalEntryId": 1,
+  "analysis": {
     "completed_tasks": [
       "Finished onboarding"
+    ],
+    "new_tasks": [
+      {
+        "title": "Complete presentation",
+        "priority": "high"
+      }
     ],
     "blockers": [
       "Backend authentication issue"
     ],
-    "new_tasks": [
-      {
-        "title": "Complete project presentation",
-        "priority": "high"
-      }
+    "priorities": [
+      "Presentation preparation"
     ],
-    "summary": "Made progress on onboarding today. Backend authentication remains blocked. A high-priority presentation needs to be completed tomorrow."
+    "summary": "User completed onboarding but is blocked by backend authentication issues."
   }
-}
-```
-
-**Response — 422 Unprocessable Entity** (AI returned malformed JSON):
-```json
-{
-  "error": "AI extraction failed",
-  "message": "Could not parse the AI response as valid JSON. The journal entry was saved; please retry extraction."
-}
-```
-
-**Response — 502 Bad Gateway** (EPAM Dial API unreachable):
-```json
-{
-  "error": "AI service unavailable",
-  "message": "EPAM Dial API returned an error. Please try again later."
 }
 ```
 
 ---
 
-### GET /api/journal
+# 2. Get Journal History
 
-List all journal entries (summary only — no extraction detail).
+## GET `/api/journal`
 
-**Response — 200 OK:**
+Returns previously submitted journal entries.
+
+---
+
+## Response
+
 ```json
 [
   {
     "id": 1,
-    "entry_text": "Today I finished onboarding...",
-    "created_at": "2026-05-12T09:30:00Z"
-  },
-  {
-    "id": 2,
-    "entry_text": "Fixed the login bug. Still waiting on design review.",
-    "created_at": "2026-05-13T10:15:00Z"
+    "text": "Today I finished onboarding...",
+    "createdAt": "2026-05-10T18:00:00Z"
   }
 ]
 ```
 
 ---
 
-### GET /api/journal/{id}
+# 3. Get Tasks
 
-Get a specific journal entry including its AI extraction.
+## GET `/api/tasks`
 
-**Response — 200 OK:**
-```json
-{
-  "id": 1,
-  "entry_text": "Today I finished onboarding...",
-  "created_at": "2026-05-12T09:30:00Z",
-  "extraction": {
-    "completed_tasks": ["Finished onboarding"],
-    "blockers": ["Backend authentication issue"],
-    "new_tasks": [
-      { "title": "Complete project presentation", "priority": "high" }
-    ],
-    "summary": "Made progress on onboarding today. Backend authentication remains blocked."
-  }
-}
-```
-
-**Response — 404 Not Found:**
-```json
-{ "error": "Journal entry not found" }
-```
+Returns all current tasks.
 
 ---
 
-### GET /api/journal/has-entry-today
+## Response
 
-Check whether the user has submitted a journal entry for today's date. Used by the n8n reminder workflow.
-
-**Response — 200 OK (entry exists):**
-```json
-{
-  "has_entry": true,
-  "date": "2026-05-12"
-}
-```
-
-**Response — 200 OK (no entry today):**
-```json
-{
-  "has_entry": false,
-  "date": "2026-05-12"
-}
-```
-
----
-
-## Task Endpoints
-
-### GET /api/tasks
-
-List all tasks. Supports optional query parameter filtering.
-
-**Query parameters (optional):**
-- `?status=pending` or `?status=done`
-- `?priority=high` or `?priority=medium` or `?priority=low`
-
-**Response — 200 OK:**
 ```json
 [
   {
     "id": 1,
-    "title": "Complete project presentation",
+    "title": "Complete presentation",
     "priority": "high",
-    "status": "pending",
-    "source": "ai",
-    "journal_entry_id": 1,
-    "created_at": "2026-05-12T09:30:00Z",
-    "updated_at": "2026-05-12T09:30:00Z"
-  },
-  {
-    "id": 2,
-    "title": "Review pull request #42",
-    "priority": "medium",
-    "status": "done",
-    "source": "manual",
-    "journal_entry_id": null,
-    "created_at": "2026-05-12T11:00:00Z",
-    "updated_at": "2026-05-12T14:22:00Z"
+    "status": "in_progress"
   }
 ]
 ```
 
 ---
 
-### POST /api/tasks
+# 4. Create Task
 
-Create a task manually.
+## POST `/api/tasks`
 
-**Request body:**
+Allows manual task creation in addition to AI-generated tasks.
+
+---
+
+## Request
+
 ```json
 {
-  "title": "Review pull request #42",
+  "title": "Setup React frontend",
   "priority": "medium"
 }
 ```
 
-**Response — 201 Created:**
+---
+
+## Response
+
 ```json
 {
   "id": 2,
-  "title": "Review pull request #42",
+  "title": "Setup React frontend",
   "priority": "medium",
-  "status": "pending",
-  "source": "manual",
-  "journal_entry_id": null,
-  "created_at": "2026-05-12T11:00:00Z",
-  "updated_at": "2026-05-12T11:00:00Z"
-}
-```
-
-**Validation — 400 Bad Request** (missing or empty title):
-```json
-{
-  "error": "Validation failed",
-  "message": "Title is required."
+  "status": "todo"
 }
 ```
 
 ---
 
-### PUT /api/tasks/{id}
+# 5. Update Task
 
-Update a task's title and/or priority.
+## PUT `/api/tasks/{id}`
 
-**Request body:**
-```json
-{
-  "title": "Review pull request #42 and leave feedback",
-  "priority": "high"
-}
-```
-
-**Response — 200 OK:** (full task object as above)
-
-**Response — 404 Not Found:**
-```json
-{ "error": "Task not found" }
-```
+Updates task fields.
 
 ---
 
-### PATCH /api/tasks/{id}/status
+## Request
 
-Toggle or set a task's status.
-
-**Request body:**
-```json
-{ "status": "done" }
-```
-
-Allowed values: `"pending"`, `"done"`
-
-**Response — 200 OK:** (full task object with updated `status` and `updated_at`)
-
----
-
-### DELETE /api/tasks/{id}
-
-Delete a task.
-
-**Response — 204 No Content**
-
-**Response — 404 Not Found:**
-```json
-{ "error": "Task not found" }
-```
-
----
-
-## Chat Endpoint
-
-### POST /api/chat
-
-Send a message to the AI assistant. The backend injects the current task list and latest journal entry as context before calling EPAM Dial API.
-
-**Request body:**
 ```json
 {
-  "message": "What should I focus on today?"
-}
-```
-
-**Response — 200 OK:**
-```json
-{
-  "reply": "Based on your current tasks and latest journal entry, your highest priority is completing the project presentation — it's marked high priority and was flagged as due tomorrow. The backend authentication blocker should also be escalated if it's been unresolved for more than a day."
-}
-```
-
-**Response — 502 Bad Gateway** (Dial API unavailable):
-```json
-{
-  "error": "AI service unavailable",
-  "message": "Could not reach EPAM Dial API."
+  "title": "Setup React frontend",
+  "priority": "high",
+  "status": "in_progress"
 }
 ```
 
 ---
 
-## AI Extraction Schema
+## Response
 
-All journal extraction responses conform to this structure:
-
-```typescript
-interface AiExtraction {
-  // What the user completed since the last entry
-  completed_tasks: string[];
-
-  // Issues or impediments blocking progress
-  blockers: string[];
-
-  // New tasks to add to the task list
-  new_tasks: NewTask[];
-
-  // 1–3 sentence plain-language summary of the entry
-  summary: string;
-}
-
-interface NewTask {
-  title: string;
-  priority: "high" | "medium" | "low";
+```json
+{
+  "success": true
 }
 ```
 
-**Priority mapping guidance (for prompting):**
+---
 
-| Signal in text | Priority |
-|----------------|----------|
-| "urgent", "ASAP", "today", "deadline", "due tomorrow" | high |
-| "soon", "next", "should", "need to" | medium |
-| "eventually", "maybe", "would be nice", "at some point" | low |
-| No explicit signal | medium (default) |
+# 6. Delete Task
+
+## DELETE `/api/tasks/{id}`
+
+Deletes a task.
+
+---
+
+## Response
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+# 7. Update Task Status
+
+## PATCH `/api/tasks/{id}/status`
+
+Updates only task status.
+
+---
+
+## Request
+
+```json
+{
+  "status": "done"
+}
+```
+
+---
+
+## Response
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+# 8. AI Chat Endpoint
+
+## POST `/api/chat`
+
+Allows lightweight contextual AI interactions.
+
+The backend injects:
+
+* current tasks,
+* latest journal entries,
+* blockers,
+* priorities
+
+into the system prompt before sending the request to EPAM Dial API.
+
+---
+
+## Request
+
+```json
+{
+  "message": "What should I focus on tomorrow?"
+}
+```
+
+---
+
+## Example Prompt Strategy
+
+```text
+System:
+You are a productivity assistant.
+
+Current Tasks:
+- Complete presentation (High)
+- Setup React frontend (Medium)
+
+Recent Blockers:
+- Backend authentication issue
+
+User:
+What should I focus on tomorrow?
+```
+
+---
+
+## Response
+
+```json
+{
+  "response": "Focus on resolving the backend authentication blocker first because it impacts multiple ongoing tasks."
+}
+```
+
+---
+
+# 9. Daily Journal Check Endpoint
+
+## GET `/api/journal/has-entry-today`
+
+Used by the n8n workflow.
+
+Returns whether the user already submitted a journal entry today.
+
+---
+
+## Response
+
+```json
+{
+  "hasEntryToday": false
+}
+```
+
+---
+
+# n8n Integration
+
+n8n is NOT part of the core runtime path.
+
+The n8n workflow exists as a separate automation layer for:
+
+* scheduled reminders,
+* notifications,
+* logging,
+* Week 1 low-code/no-code requirement.
+
+---
+
+# Planned n8n Workflow
+
+```text
+Schedule Trigger
+→ GET /api/journal/has-entry-today
+→ IF hasEntryToday == false
+→ Send Reminder Notification
+→ Log Execution
+```
+
+---
+
+# Error Handling
+
+The API should:
+
+* return meaningful error messages,
+* gracefully handle Dial API failures,
+* handle malformed AI JSON responses,
+* prevent application crashes on invalid input.
+
+---
+
+# MVP Scope Notes
+
+The MVP intentionally excludes:
+
+* authentication,
+* multi-user collaboration,
+* advanced Kanban boards,
+* long-term memory systems,
+* vector databases,
+* full RAG pipelines,
+* autonomous AI agents.
+
+---
+
+# Future Enhancements
+
+Possible future API additions:
+
+* weekly AI summaries,
+* monthly productivity analytics,
+* semantic search across journal entries,
+* lightweight RAG memory,
+* voice input support,
+* gamification endpoints.
+
+Example future endpoints:
+
+```text
+GET /api/journal/weekly-summary
+GET /api/analytics/productivity
+POST /api/voice/transcribe
+```

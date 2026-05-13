@@ -2,192 +2,405 @@
 
 ## High-Level Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      React Frontend                          │
-│               (Vite + React, localhost:5173)                 │
-│   ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│   │  Journal UI  │  │  Task List   │  │   Chat Panel     │  │
-│   └──────────────┘  └──────────────┘  └──────────────────┘  │
-└────────────────────────────┬─────────────────────────────────┘
-                             │ REST (HTTP/JSON)
-┌────────────────────────────▼─────────────────────────────────┐
-│                  ASP.NET Core Web API                        │
-│                (C#, .NET 9, localhost:5000)                  │
-│   ┌─────────────────┐ ┌──────────────┐ ┌──────────────────┐ │
-│   │JournalController│ │TaskController│ │  ChatController  │ │
-│   └─────────────────┘ └──────────────┘ └──────────────────┘ │
-│   ┌──────────────────────────────────────────────────────┐   │
-│   │                   DialService                        │   │
-│   │  (HttpClient → EPAM Dial API, OpenAI-compatible)    │   │
-│   └──────────────────────────────────────────────────────┘   │
-│   ┌──────────────────────────────────────────────────────┐   │
-│   │              EF Core + SQLite                        │   │
-│   │                (productivity.db)                     │   │
-│   └──────────────────────────────────────────────────────┘   │
-└─────────────────────┬────────────────────┬───────────────────┘
-                      │                    │
-          ┌───────────▼──────────┐ ┌───────▼───────────┐
-          │   EPAM Dial API      │ │   SQLite DB        │
-          │  (LLM gateway)       │ │  (productivity.db) │
-          └──────────────────────┘ └───────────────────┘
+```text
++--------------------------------------------------+
+|                  React Frontend                  |
+|              (Vite + React, localhost:5173)      |
+|                                                  |
+|  [ Journal UI ]  [ Task List ]  [ Chat Panel ]  |
++--------------------------------------------------+
+                      |
+                      | REST (HTTP/JSON)
+                      v
++--------------------------------------------------+
+|            ASP.NET Core Web API Backend          |
+|                                                  |
+|  Controllers:                                    |
+|   - JournalController                            |
+|   - TaskController                               |
+|   - ChatController                               |
+|                                                  |
+|  Services:                                       |
+|   - DialService                                  |
+|   - JournalService                               |
+|   - TaskService                                  |
+|                                                  |
+|  Persistence:                                    |
+|   - EF Core                                      |
+|   - SQLite                                       |
++--------------------------------------------------+
+           |                         |
+           |                         |
+           v                         v
++-------------------+     +----------------------+
+|   EPAM Dial API   |     |     SQLite DB        |
+|   (LLM Gateway)   |     |   productivity.db    |
++-------------------+     +----------------------+
 
-──────────────────────────────────────────────────────────────
-n8n (localhost:5678) — runs independently, not in the main path
-  Cron Trigger (09:00 daily)
-    → HTTP GET /api/journal/has-entry-today
-    → IF has_entry === false → Notification / log
-    → IF has_entry === true  → Log "no reminder needed"
-──────────────────────────────────────────────────────────────
-```
-
----
-
-## Data Flow
-
-### Journal Extraction Flow
-
-```
-1.  User types journal text in React textarea → clicks "Analyze"
-2.  React POST /api/journal  { entry_text: "..." }
-3.  Backend saves entry to SQLite (journal_entries)
-4.  DialService builds system prompt (extraction instructions + schema)
-5.  DialService sends { system_prompt, user_message } to EPAM Dial API
-6.  EPAM Dial returns JSON: { completed_tasks, blockers, new_tasks, summary }
-7.  Backend validates JSON structure (422 if invalid)
-8.  Backend saves extraction to SQLite (ai_extractions)
-9.  Backend saves each new_task to SQLite (tasks, source="ai")
-10. Backend returns 201 with full extraction result
-11. React renders extraction panel; task list auto-refreshes
-```
-
-### Chat Flow
-
-```
-1. User types message in chat panel → clicks Send
-2. React POST /api/chat  { message: "..." }
-3. Backend fetches: all tasks (GET from DB) + latest journal entry (GET from DB)
-4. DialService builds system prompt injecting tasks + journal context
-5. DialService sends to EPAM Dial API
-6. EPAM Dial returns text response
-7. Backend returns 200  { reply: "..." }
-8. React appends user message + AI reply to in-memory chat history
-```
-
-### n8n Reminder Flow
-
-```
-1. n8n cron trigger fires at 09:00 AM daily
-2. HTTP GET → http://localhost:5000/api/journal/has-entry-today
-3. n8n IF node: response.has_entry === false?
-   ├── TRUE:  HTTP POST notification  (webhook / Slack / execution log)
-   │          → log: "Reminder sent at {timestamp}"
-   └── FALSE: log: "Entry already written — no reminder needed"
++--------------------------------------------------+
+|                     n8n Workflow                 |
+|                                                  |
+|  Runs independently from the main runtime path   |
+|                                                  |
+|  Example flow:                                   |
+|  Cron Trigger                                    |
+|   → GET /api/journal/has-entry-today             |
+|   → IF hasEntryToday == false                    |
+|   → Reminder Notification / Execution Log        |
++--------------------------------------------------+
 ```
 
 ---
 
-## Backend Responsibilities
+# System Overview
 
-- Receive and persist journal entries (`JournalController`)
-- Orchestrate AI extraction via `DialService` on journal submission
-- Provide CRUD endpoints for task management (`TaskController`)
-- Receive chat messages, build context-aware prompts, delegate to `DialService` (`ChatController`)
-- Expose `GET /api/journal/has-entry-today` for n8n integration
-- Validate AI JSON responses; surface errors as appropriate HTTP codes
-- Manage all database access via EF Core repositories
+The application is designed as a lightweight AI-powered productivity assistant.
 
-### Key backend components
+The system allows users to:
 
-| Component | Responsibility |
-|-----------|----------------|
-| `JournalController` | Handles journal CRUD + triggers extraction |
-| `TaskController` | Handles task CRUD + status toggle |
-| `ChatController` | Builds context prompt + delegates to DialService |
-| `DialService` | Single HTTP client wrapper for all EPAM Dial API calls |
-| `AppDbContext` | EF Core DbContext for SQLite |
+* submit natural-language journal entries,
+* extract structured tasks using AI,
+* manage tasks and priorities,
+* interact with a contextual AI assistant,
+* review progress and blockers over time.
+
+The architecture intentionally prioritizes:
+
+* simplicity,
+* fast iteration,
+* demo-readiness,
+* realistic MVP scope.
+
+The architecture intentionally avoids:
+
+* enterprise complexity,
+* microservices,
+* authentication,
+* multi-user infrastructure,
+* advanced orchestration layers.
 
 ---
 
-## Frontend Responsibilities
+# Main Components
 
-- Journal entry textarea with submit button and loading state
-- Extraction result panel: completed tasks, blockers, new tasks (with priority), summary
-- Task list with add/edit/delete/mark-done interactions
-- Chat panel: message input, conversation history (in-memory)
-- Journal history list (past entries)
-- API client (`fetch` or `axios`) — no Redux or complex state management needed for MVP
+## Frontend (React)
+
+The React frontend is responsible for:
+
+* journal entry submission,
+* task display and CRUD,
+* AI chat interactions,
+* displaying AI-generated summaries,
+* lightweight UI state management.
+
+---
+
+## Backend (ASP.NET Core Web API)
+
+The backend is responsible for:
+
+* REST API endpoints,
+* orchestrating AI calls,
+* prompt construction,
+* SQLite persistence,
+* business logic,
+* contextual AI interactions.
+
+The backend acts as the single integration layer between:
+
+* frontend,
+* EPAM Dial API,
+* database,
+* optional automation workflows.
+
+---
+
+## Database (SQLite)
+
+SQLite is used as a lightweight local database for the PoC.
+
+The database stores:
+
+* journal entries,
+* extracted AI summaries,
+* tasks,
+* blockers,
+* metadata.
+
+SQLite was selected because:
+
+* it requires no separate server,
+* it is simple to configure,
+* it is ideal for a single-user MVP,
+* it reduces operational complexity.
 
 ---
 
 ## AI Integration (EPAM Dial API)
 
-EPAM Dial exposes an **OpenAI-compatible API**. All requests use the same message format as `POST /v1/chat/completions`.
+EPAM Dial API is used as the LLM gateway.
 
-### Extraction system prompt
+The backend sends:
 
+* prompts,
+* contextual task data,
+* recent journal entries
+
+to the Dial API and receives:
+
+* structured JSON,
+* summaries,
+* AI chat responses.
+
+The system should always request structured JSON output for extraction flows.
+
+---
+
+## n8n Workflow
+
+n8n is intentionally separated from the main application runtime path.
+
+n8n exists only as:
+
+* a low-code/no-code automation layer,
+* a Week 1 deliverable,
+* a lightweight reminder/notification workflow.
+
+n8n is NOT responsible for:
+
+* core AI orchestration,
+* task extraction,
+* application state,
+* business logic.
+
+---
+
+# Data Flow
+
+## 1. Journal Extraction Flow
+
+```text
+User submits journal entry
+    ↓
+React sends POST /api/journal
+    ↓
+Backend builds extraction prompt
+    ↓
+Backend sends request to EPAM Dial API
+    ↓
+Dial API returns structured JSON
+    ↓
+Backend saves:
+    - journal entry
+    - extracted tasks
+    - blockers
+    - summary
+    ↓
+Backend returns response to frontend
+    ↓
+Frontend displays extraction results
 ```
-You are a productivity assistant. Extract structured information from the user's journal entry.
-Return ONLY a valid JSON object — no explanation, no markdown, no code fences.
-Use exactly this schema:
-{
-  "completed_tasks": ["string"],
-  "blockers": ["string"],
-  "new_tasks": [{"title": "string", "priority": "high|medium|low"}],
-  "summary": "string"
-}
-If a category is empty, return an empty array []. The summary must be 1–3 sentences.
+
+---
+
+## 2. Context-Aware Chat Flow
+
+```text
+User sends chat message
+    ↓
+React sends POST /api/chat
+    ↓
+Backend loads:
+    - current tasks
+    - recent journal entries
+    - blockers
+    ↓
+Backend injects context into system prompt
+    ↓
+Backend sends request to EPAM Dial API
+    ↓
+AI response returned
+    ↓
+Frontend displays contextual response
 ```
 
-### Chat system prompt
+The MVP uses lightweight context injection instead of full RAG.
 
+---
+
+## 3. n8n Reminder Flow
+
+```text
+Cron Trigger (daily)
+    ↓
+GET /api/journal/has-entry-today
+    ↓
+IF hasEntryToday == false
+    ↓
+Send Reminder Notification
+    ↓
+Log Workflow Execution
 ```
-You are a productivity assistant helping a developer manage their work.
+
+---
+
+# Backend Responsibilities
+
+The backend is responsible for:
+
+* receiving and validating requests,
+* orchestrating AI interactions,
+* prompt construction,
+* persistence logic,
+* task CRUD operations,
+* lightweight contextual memory,
+* error handling,
+* API contracts.
+
+---
+
+# Key Backend Components
+
+| Component         | Responsibility                       |
+| ----------------- | ------------------------------------ |
+| JournalController | Journal submission and history       |
+| TaskController    | Task CRUD operations                 |
+| ChatController    | Context-aware AI chat                |
+| DialService       | Communication with EPAM Dial API     |
+| JournalService    | Journal orchestration/business logic |
+| TaskService       | Task management logic                |
+| AppDbContext      | SQLite persistence via EF Core       |
+
+---
+
+# Frontend Responsibilities
+
+The frontend is responsible for:
+
+* rendering journal input,
+* displaying extracted tasks,
+* task management interactions,
+* AI chat UI,
+* loading/error states,
+* lightweight local UI state.
+
+The MVP intentionally avoids:
+
+* Redux,
+* complex state management,
+* advanced frontend architecture.
+
+---
+
+# AI Integration Details
+
+## Extraction Prompt Strategy
+
+The extraction flow should request strict structured JSON.
+
+Example prompt:
+
+```text
+You are a productivity assistant.
+
+Extract structured information from the user's journal entry.
+
+Return ONLY valid JSON.
+
+Required fields:
+- completed_tasks
+- new_tasks
+- blockers
+- priorities
+- summary
+
+Each new task must contain:
+- title
+- priority
+
+Priority values:
+- low
+- medium
+- high
+```
+
+---
+
+## Context-Aware Chat Prompt
+
+Example strategy:
+
+```text
+System:
+You are a productivity assistant helping a user organize work and priorities.
 
 Current tasks:
-{task_list_formatted}
+{{task_list}}
 
-Latest journal entry ({date}):
-{entry_text}
+Recent journal entries:
+{{recent_entries}}
 
-Answer the user's question based on this context. Be concise and practical.
-If context is not available, say so and offer general guidance.
+Current blockers:
+{{blockers}}
+
+Answer concisely and practically.
 ```
 
-### Dial API configuration
+---
 
-| Parameter | Value |
-|-----------|-------|
-| Base URL | Configured via `appsettings.json` (`DialApi:BaseUrl`) |
-| API Key | Configured via `appsettings.json` (`DialApi:ApiKey`) — do not hardcode |
-| Model | Configured via `appsettings.json` (`DialApi:Model`) |
-| Temperature (extraction) | 0.1 |
-| Temperature (chat) | 0.7 |
-| Max tokens | 1000 (extraction), 500 (chat) |
+# Dial API Configuration
+
+The backend should configure:
+
+| Setting     | Description                                    |
+| ----------- | ---------------------------------------------- |
+| Base URL    | EPAM Dial API endpoint                         |
+| API Key     | Stored in appsettings or environment variables |
+| Model       | Configurable model name                        |
+| Temperature | Low for extraction, medium for chat            |
+| Max Tokens  | Configurable request limits                    |
+
+Sensitive values must NOT be hardcoded.
 
 ---
 
-## n8n Workflow Role
+# Error Handling
 
-n8n is a **separate automation layer** — it does not run in the main application path and has no dependency on the React frontend. Its role in this PoC is to demonstrate a low-code workflow primitive:
+The system should gracefully handle:
 
-- Trigger type: Schedule (cron)
-- External integration: HTTP request to the backend
-- Conditional logic: IF node on `has_entry` value
-- Output: notification or log entry
+* Dial API failures,
+* malformed JSON,
+* timeouts,
+* invalid requests,
+* empty responses.
 
-For the demo, the "notification" can be an n8n execution log, HTTP POST to a webhook.site URL, or a Slack message — whatever is simplest to demonstrate visually.
+The UI should display:
+
+* loading states,
+* validation errors,
+* AI failure messages.
 
 ---
 
-## Future RAG Extension
+# Future RAG Extension (Optional)
 
-The architecture deliberately leaves room for lightweight RAG without requiring breaking changes:
+RAG is NOT part of the MVP.
 
-1. Add vector storage: SQLite + `sqlite-vss` extension, or an embedded store (Chroma, FAISS)
-2. On journal save: call EPAM Dial embeddings endpoint → store `(entry_id, text_chunk, embedding_vector)`
-3. On chat/extraction: query vector store for top-k semantically similar past entries → inject as additional context in the system prompt
-4. No changes needed to: REST API contracts, React frontend, or EF Core schema (journal + tasks tables unchanged)
-5. Only `DialService` and storage layer expand
+However, the architecture intentionally leaves room for future lightweight RAG capabilities.
 
-This keeps the RAG extension fully additive and non-breaking.
+Possible future enhancements:
+
+* embeddings for journal entries,
+* semantic search,
+* recurring blocker analysis,
+* long-term productivity summaries,
+* vector search over historical data.
+
+Potential future technologies:
+
+* SQLite vector extension,
+* pgvector,
+* Qdrant,
+* ChromaDB.
+
+The future RAG layer should remain additive and should not require major architectural rewrites.

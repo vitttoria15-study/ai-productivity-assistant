@@ -16,6 +16,13 @@
 
 Show a minimal working AI-powered productivity assistant.
 
+The primary objective of Week 1 is to demonstrate:
+
+* working project structure,
+* AI integration,
+* a minimal end-to-end workflow,
+* a realistic MVP direction.
+
 ---
 
 ## Main Deliverables
@@ -27,7 +34,7 @@ Show a minimal working AI-powered productivity assistant.
 * Initialize React frontend
 * Configure SQLite
 * Configure EPAM Dial API access
-* Prepare basic documentation
+* Prepare documentation/specifications
 
 ---
 
@@ -36,7 +43,7 @@ Show a minimal working AI-powered productivity assistant.
 The user should be able to:
 
 * submit a journal entry,
-* send the text to the AI,
+* send the entry to the AI,
 * receive structured AI extraction results,
 * view extracted tasks/blockers in the UI.
 
@@ -55,14 +62,14 @@ Journal Entry
 
 ### 3. Basic UI
 
-Simple UI only:
+Simple MVP UI only:
 
 * journal input field,
 * submit button,
-* AI response panel,
+* AI extraction result panel,
 * simple task list.
 
-No advanced styling required for Week 1.
+No advanced styling is required for Week 1.
 
 ---
 
@@ -74,9 +81,9 @@ Example:
 
 ```text
 Schedule Trigger
-→ Reminder Message
-→ IF Condition
-→ Notification / Execution Log
+→ GET /api/journal/has-entry-today
+→ IF hasEntryToday == false
+→ Reminder Notification / Execution Log
 ```
 
 Purpose:
@@ -86,29 +93,33 @@ Purpose:
 * demonstrate conditional logic,
 * satisfy Week 1 course requirement.
 
+The n8n workflow should remain separate from the core application runtime path.
+
 ---
 
-## May 15 Demo Scope
+# May 15 Demo Scope
 
-### Must Work
+## Must Work
 
 * journal submission,
 * AI extraction,
 * visible structured output,
 * basic React UI,
+* SQLite persistence,
 * simple n8n workflow.
 
 ---
 
-### Not Required
+## Not Required
 
 * polished UI,
 * advanced CRUD,
-* long-term memory,
 * RAG,
-* production infrastructure,
+* vector databases,
+* long-term memory,
 * authentication,
-* advanced architecture.
+* production infrastructure,
+* advanced frontend architecture.
 
 ---
 
@@ -116,7 +127,9 @@ Purpose:
 
 ## Goal
 
-Transform the prototype into a usable productivity assistant.
+Transform the prototype into a usable AI productivity assistant.
+
+The focus of Week 2 is usability and contextual AI behavior.
 
 ---
 
@@ -139,16 +152,17 @@ The user should be able to:
 The AI assistant should answer questions using:
 
 * current tasks,
-* latest journal entries,
-* active blockers.
+* recent journal entries,
+* active blockers,
+* current priorities.
 
 Example:
 
 ```text
-"What should I focus on tomorrow?"
+What should I focus on tomorrow?
 ```
 
-The MVP will use lightweight context injection into prompts instead of full RAG.
+The MVP should use lightweight prompt context injection instead of full RAG.
 
 ---
 
@@ -158,7 +172,7 @@ The user should be able to:
 
 * view previous journal entries,
 * review progress history,
-* track recurring blockers.
+* identify recurring blockers.
 
 ---
 
@@ -169,7 +183,8 @@ Improve:
 * loading states,
 * error handling,
 * layout consistency,
-* task organization.
+* task organization,
+* basic responsiveness.
 
 ---
 
@@ -178,6 +193,13 @@ Improve:
 ## Goal
 
 Prepare a stable and convincing final demo.
+
+The focus of Week 3 is:
+
+* demo stability,
+* AI experience,
+* polish,
+* productivity insights.
 
 ---
 
@@ -188,7 +210,8 @@ Prepare a stable and convincing final demo.
 * stable end-to-end flows,
 * reliable AI responses,
 * prepared demo data,
-* consistent UI behavior.
+* consistent UI behavior,
+* improved demo presentation.
 
 ---
 
@@ -196,15 +219,21 @@ Prepare a stable and convincing final demo.
 
 Generate:
 
+* daily summaries,
 * weekly summaries,
 * blocker overviews,
-* productivity insights,
-* accomplishment summaries.
+* accomplishment summaries,
+* productivity insights.
 
-Examples:
+Example questions:
 
-* “What did I complete this week?”
-* “Which blockers repeated most often this month?”
+```text
+What did I complete this week?
+```
+
+```text
+Which blockers repeated most often this month?
+```
 
 ---
 
@@ -219,7 +248,7 @@ Possible stretch goals:
 * productivity analytics,
 * long-term trend summaries.
 
-Only implement stretch goals if the core MVP is stable.
+Stretch goals should only be implemented if the core MVP is stable.
 
 ---
 
@@ -229,8 +258,9 @@ Only implement stretch goals if the core MVP is stable.
 | -------- | ------------------------- |
 | P0       | Journal → AI extraction   |
 | P0       | EPAM Dial API integration |
-| P1       | Task management           |
 | P1       | Basic React UI            |
+| P1       | Task management           |
+| P1       | SQLite persistence        |
 | P1       | n8n workflow              |
 | P2       | Context-aware AI chat     |
 | P2       | Journal history           |
@@ -247,13 +277,39 @@ The project prioritizes:
 * clean MVP implementation,
 * visible AI functionality,
 * realistic implementation scope,
-* demo-ready workflows,
+* stable demo workflows,
 * incremental development.
 
 The project intentionally avoids:
 
 * enterprise-level complexity,
 * overengineering,
-* advanced infrastructure,
 * unnecessary architectural layers,
+* premature optimization,
 * full Jira-like functionality.
+
+---
+
+# Risk Management
+
+| Risk                       | Mitigation                                    |
+| -------------------------- | --------------------------------------------- |
+| EPAM Dial API setup delays | Mock extraction responses temporarily         |
+| AI malformed JSON          | Add response validation and fallback handling |
+| Limited development time   | Prioritize P0/P1 only                         |
+| Frontend complexity        | Keep UI intentionally minimal                 |
+| Scope creep                | Defer stretch goals until MVP is stable       |
+| Demo instability           | Prepare fallback screenshots/demo data        |
+
+---
+
+# Success Criteria
+
+The project is considered successful if:
+
+* AI extraction works end-to-end,
+* users can manage tasks,
+* contextual AI responses work,
+* summaries are visible,
+* the architecture remains understandable,
+* the MVP remains realistic and demo-ready.
