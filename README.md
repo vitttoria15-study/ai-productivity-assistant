@@ -185,12 +185,12 @@ Schedule Trigger
 
 * [x] Project idea defined
 * [x] Repository initialized
-* [ ] Environment setup
+* [x] Environment setup
 * [ ] EPAM Dial API integration
 * [ ] Initial AI prototype
 * [ ] n8n workflow
-* [ ] React frontend skeleton
-* [ ] SQLite integration
+* [x] React frontend skeleton
+* [x] SQLite integration
 
 ---
 
