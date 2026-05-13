@@ -44,7 +44,7 @@ public class JournalController : ControllerBase
             _db.TaskItems.Add(new TaskItem
             {
                 Title = taskTitle,
-                Status = "pending",
+                Status = "todo",
                 CreatedAt = DateTime.UtcNow,
                 JournalEntryId = entry.Id
             });
