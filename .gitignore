@@ -13,11 +13,14 @@ appsettings.*.json
 
 # SQLite
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
 # System/IDE
 .vscode/
+.vs/
 .idea/
 *.suo
 *.user
