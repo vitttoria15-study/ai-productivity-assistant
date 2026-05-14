@@ -98,6 +98,42 @@
       ],
       "id": "9a238d98-d073-4edc-a1d7-f9c55e69168b",
       "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5184/api/automation/logs",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"workflowName\": \"Daily Journal Reminder\",\n  \"eventType\": \"JournalMissing\",\n  \"message\": \"No journal entry found today. Reminder should be sent.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        368,
+        64
+      ],
+      "id": "f13c2446-261c-40af-a16c-6408dee9f69e",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5184/api/automation/logs",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"workflowName\": \"Daily Journal Reminder\",\n  \"eventType\": \"JournalExists\",\n  \"message\": \"Journal entry exists today. Daily summary can be generated.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        368,
+        -112
+      ],
+      "id": "df55ce8b-ae4f-4df0-8731-ee0d9b2a9744",
+      "name": "HTTP Request2"
     }
   ],
   "pinData": {},
@@ -141,6 +177,28 @@
           }
         ]
       ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -148,7 +206,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "f05b42d7-099a-4881-ae6a-b925a8f7bc9f",
+  "versionId": "d767fe84-68e4-412a-9180-fbb54f6dc42b",
   "meta": {
     "instanceId": "aaf1e20905d13c2e2feb2b1fc18889fbc06fb6132c874639887c7201ff0e00ca"
   },

@@ -18,11 +18,13 @@ The project is built as a Proof of Concept (PoC) for the AI Upskilling Program a
 
 - Journal entry submission
 - SQLite database persistence
-- Task extraction workflow (mock AI response)
 - REST API endpoints
-- React frontend integration
 - Swagger API documentation
 - EF Core + SQLite setup
+- n8n workflow automation
+- task extraction workflow (mock AI response)
+- SQLite workflow logging
+- backend/frontend integration
 
 ## Planned
 
@@ -30,7 +32,6 @@ The project is built as a Proof of Concept (PoC) for the AI Upskilling Program a
 - Real AI extraction
 - AI-generated summaries
 - Blocker detection
-- n8n reminder workflow
 
 ---
 
@@ -43,7 +44,7 @@ The project is built as a Proof of Concept (PoC) for the AI Upskilling Program a
 | Database   | SQLite                    |
 | ORM        | Entity Framework Core     |
 | AI         | EPAM Dial API (planned)   |
-| Automation | n8n (planned)             |
+| Automation | n8n                       |
 
 ---
 
@@ -54,9 +55,15 @@ React Frontend
        ↓
 ASP.NET Core Web API
        ↓
-AI Extraction Service
+AI Extraction Service (Mock)
        ↓
 SQLite Database
+```
+
+```text
+n8n Automation Workflow
+       ↓
+Backend API Endpoints
 ```
 
 ---
@@ -112,6 +119,14 @@ Checks whether a journal entry exists for the current day.
 }
 ```
 
+## GET /api/automation/logs
+
+Returns workflow execution logs.
+
+## POST /api/automation/logs
+
+Stores workflow execution events from n8n.
+
 ---
 
 # Running the Project
@@ -150,12 +165,48 @@ backend/app.db
 
 ---
 
+# Automation Logging
+
+The project includes workflow execution logging from n8n into SQLite.
+
+Automation events are stored using:
+- workflow name
+- event type
+- execution message
+- timestamp
+
+Example events:
+- JournalMissing
+- JournalExists
+
+---
+
 # Current AI Implementation
 
 The project currently uses a mocked AI extraction response.
 
 Planned next step:
 - integrate EPAM Dial API for real LLM-powered extraction.
+
+---
+
+# Planned Next Steps
+
+## Week 2
+
+- Integrate EPAM Dial API
+- Replace mock extraction with real AI processing
+- Add task prioritization and status updates
+- Introduce project/task grouping
+- Improve frontend task management UI
+
+## Week 3
+
+- AI-generated daily summaries
+- Weekly and monthly productivity summaries
+- Voice-to-text journal input
+- Expanded n8n automation workflows
+- Smarter personalized reminders
 
 ---
 

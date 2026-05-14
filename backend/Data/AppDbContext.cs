@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
 
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
+    public DbSet<AutomationLog> AutomationLogs => Set<AutomationLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
