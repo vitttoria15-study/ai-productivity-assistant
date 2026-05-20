@@ -29,3 +29,15 @@ appsettings.*.json
 *.sln.docstates
 .DS_Store
 Thumbs.db
+
+# Spec Kit local cache
+.specify/extensions/**/.registry/
+.specify/**/*.tmp
+.specify/**/*.cache
+
+# Secrets
+appsettings.Development.json
+secrets.json
+
+# Ollama
+ollama.log
