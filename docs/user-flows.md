@@ -113,7 +113,8 @@ Tomorrow I need to prepare the demo presentation and continue the React setup.
 * User can submit a journal entry.
 * AI returns structured JSON.
 * Extracted tasks and blockers are visible in the UI.
-* Data is saved in SQLite.
+* Journal entry and extracted blockers are saved to SQLite.
+* Extracted tasks are created in Todoist via the Todoist API.
 
 ---
 
@@ -138,7 +139,9 @@ User opens task list
     ↓
 Frontend sends GET /api/tasks
     ↓
-Backend returns current tasks
+Backend fetches tasks from the Todoist API
+    ↓
+Backend returns tasks to frontend
     ↓
 Frontend displays tasks grouped or sorted by status/priority
 ```
@@ -186,7 +189,7 @@ User creates or edits a task
     ↓
 Frontend sends request to task API
     ↓
-Backend updates SQLite
+Backend calls Todoist API (create / update / delete)
     ↓
 Frontend refreshes task list
 ```
@@ -237,7 +240,8 @@ User asks a question
     ↓
 Frontend sends POST /api/chat
     ↓
-Backend loads current tasks, recent journal entries, and blockers
+Backend loads from Todoist API: current tasks and projects
+Backend loads from SQLite: recent journal entries and active blockers
     ↓
 Backend injects this context into the prompt
     ↓
@@ -350,7 +354,8 @@ User requests summary
     ↓
 Frontend sends request to backend
     ↓
-Backend loads recent journal entries and tasks
+Backend loads from SQLite: recent journal entries
+Backend loads from Todoist API: current tasks and projects
     ↓
 Backend builds summary prompt
     ↓

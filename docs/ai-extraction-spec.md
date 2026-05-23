@@ -36,3 +36,19 @@ Return valid JSON only.
 
 ---
 
+## Output Destinations
+
+After the AI returns structured JSON, the backend routes each field:
+
+| Field | Destination |
+| --- | --- |
+| `new_tasks` | Pushed to Todoist API — created as new Todoist tasks |
+| `completed_tasks` | Todoist API — matching tasks marked as done |
+| `blockers` | Saved to SQLite as `ExtractedBlocker` records linked to the journal entry |
+| `summary` | Saved to SQLite as `JournalEntry.Summary` |
+| `priorities` | Used in prompt context for chat; not persisted separately |
+
+Tasks are never written to SQLite.
+
+---
+
