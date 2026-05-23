@@ -41,3 +41,13 @@ secrets.json
 
 # Ollama
 ollama.log
+
+# Claude / local AI tooling
+.claude/settings.local.json
+.claude/worktrees/
+
+# SDLC Factory local state
+.ai-run/sdlc-factory/
+.agents/memory/sdlc/daily/
+docs/superpowers/runs/
+docs/superpowers/tasks/*/.state.json

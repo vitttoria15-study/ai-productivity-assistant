@@ -1,6 +1,11 @@
 {
   "permissions": {
-    "allow": ["mcp__playwright"],
+    "allow": [
+      "mcp__playwright",
+      "Bash(git --version)",
+      "Bash(node *)",
+      "Bash(dotnet build *)"
+    ],
     "deny": []
   }
 }
