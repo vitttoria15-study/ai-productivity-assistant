@@ -103,13 +103,17 @@ The AI extracts structured information from journal entries:
 
 ## Task Management
 
+Tasks are managed via the Todoist API. The app creates, reads, updates, and deletes tasks in Todoist.
+
 Users can:
 
-* view tasks,
-* manually create tasks,
-* edit tasks,
-* delete tasks,
-* mark tasks as completed.
+* view tasks sourced from Todoist,
+* manually create tasks in Todoist,
+* edit tasks in Todoist,
+* delete tasks in Todoist,
+* mark tasks as completed in Todoist.
+
+The backend proxies task operations to Todoist and can enrich requests with AI-extracted context.
 
 ---
 
@@ -141,13 +145,14 @@ The system can generate:
 
 The planned technology stack:
 
-| Layer          | Technology           |
-| -------------- | -------------------- |
-| Frontend       | React                |
-| Backend        | ASP.NET Core Web API |
-| Database       | SQLite               |
-| AI Integration | EPAM Dial API        |
-| Automation     | n8n                  |
+| Layer           | Technology                        |
+| --------------- | --------------------------------- |
+| Frontend        | React                             |
+| Backend         | ASP.NET Core Web API              |
+| App metadata DB | SQLite (journal, summaries, logs) |
+| AI Integration  | EPAM Dial API                     |
+| Task management | Todoist API                       |
+| Automation      | n8n                               |
 
 ---
 
@@ -157,10 +162,9 @@ The planned technology stack:
 React Frontend
     ↓
 ASP.NET Core Web API
-    ↓
-EPAM Dial API (LLM)
-    ↓
-SQLite Database
+    ↓              ↓              ↓
+EPAM Dial API  Todoist API   SQLite Database
+(LLM Gateway) (Tasks/Projects) (App metadata)
 ```
 
 n8n is used separately for low-code automation workflows and reminder flows.

@@ -135,15 +135,17 @@ The focus of Week 2 is usability and contextual AI behavior.
 
 ## Main Deliverables
 
-### 1. Task Management
+### 1. Task Management (via Todoist API)
+
+Task management is implemented through the Todoist API. The backend acts as a proxy between the frontend and Todoist.
 
 The user should be able to:
 
-* create tasks,
-* edit tasks,
-* delete tasks,
-* mark tasks as completed,
-* organize tasks by priority/status.
+* create tasks in Todoist,
+* edit tasks in Todoist,
+* delete tasks in Todoist,
+* mark tasks as completed in Todoist,
+* organize tasks by priority/status as returned by Todoist.
 
 ---
 
@@ -254,19 +256,20 @@ Stretch goals should only be implemented if the core MVP is stable.
 
 # MVP Priorities
 
-| Priority | Feature                   |
-| -------- | ------------------------- |
-| P0       | Journal → AI extraction   |
-| P0       | EPAM Dial API integration |
-| P1       | Basic React UI            |
-| P1       | Task management           |
-| P1       | SQLite persistence        |
-| P1       | n8n workflow              |
-| P2       | Context-aware AI chat     |
-| P2       | Journal history           |
-| P3       | Weekly/monthly summaries  |
-| P3       | Lightweight RAG           |
-| P3       | Gamification              |
+| Priority | Feature                                          |
+| -------- | ------------------------------------------------ |
+| P0       | Journal → AI extraction                          |
+| P0       | EPAM Dial API integration                        |
+| P0       | Todoist API integration (task management)        |
+| P1       | Basic React UI                                   |
+| P1       | Task management via Todoist                      |
+| P1       | SQLite metadata persistence (journal, logs)      |
+| P1       | n8n workflow                                     |
+| P2       | Context-aware AI chat                            |
+| P2       | Journal history                                  |
+| P3       | Weekly/monthly summaries                         |
+| P3       | Lightweight RAG                                  |
+| P3       | Gamification                                     |
 
 ---
 

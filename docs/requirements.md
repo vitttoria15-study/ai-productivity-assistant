@@ -86,6 +86,14 @@ The extraction should include:
 * priorities,
 * summary.
 
+### Output Destinations
+
+After extraction:
+
+* `new_tasks` are created in Todoist via the Todoist API.
+* `completed_tasks` mark matching Todoist tasks as done.
+* `blockers` and `summary` are saved to SQLite.
+
 ### Expected AI Response Shape
 
 ```json
@@ -107,7 +115,9 @@ The extraction should include:
 
 ## FR-3 Task Management
 
-The system shall support basic task CRUD functionality.
+The system shall support basic task CRUD by proxying requests to the Todoist API.
+
+Tasks are not stored in SQLite. All task create, read, update, and delete operations are handled by Todoist. The backend may enrich task creation with AI-extracted metadata (title, priority) from the extraction flow.
 
 Users shall be able to:
 
@@ -255,12 +265,17 @@ The system should not implement:
 
 ## NFR-4 SQLite Compatibility
 
-The backend should remain compatible with SQLite.
+The backend should remain compatible with SQLite for app-metadata persistence.
 
-The system should avoid:
+SQLite scope is limited to:
 
-* database-specific enterprise features,
-* complex distributed persistence.
+* journal entries,
+* AI summaries,
+* extracted blockers,
+* automation logs,
+* user preferences.
+
+Task and project queries target the Todoist API, not SQLite. The system should avoid database-specific enterprise features and complex distributed persistence.
 
 ---
 
@@ -345,9 +360,10 @@ Suggested defaults:
 
 * ASP.NET Core Web API
 * REST API architecture
-* SQLite persistence
+* SQLite persistence for app metadata
 * EF Core ORM
 * HTTP client integration with EPAM Dial API
+* HTTP client integration with Todoist API (task and project management)
 
 ---
 
@@ -362,9 +378,10 @@ Suggested defaults:
 
 ## Database
 
-* SQLite local database
-* Simple schema
+* SQLite local database for app-specific metadata (journal entries, summaries, blockers, logs)
+* Simple schema scoped to metadata tables
 * Single-user data model
+* Tasks and projects owned by Todoist — no task tables in SQLite
 
 ---
 

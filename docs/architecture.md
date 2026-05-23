@@ -29,13 +29,13 @@
 |   - EF Core                                      |
 |   - SQLite                                       |
 +--------------------------------------------------+
-           |                         |
-           |                         |
-           v                         v
-+-------------------+     +----------------------+
-|   EPAM Dial API   |     |     SQLite DB        |
-|   (LLM Gateway)   |     |   productivity.db    |
-+-------------------+     +----------------------+
+           |                |                    |
+           |                |                    |
+           v                v                    v
++------------------+ +------------------+ +--------------------+
+|  EPAM Dial API   | |   Todoist API    | |    SQLite DB       |
+|  (LLM Gateway)   | | (Tasks/Projects) | |  (App metadata)    |
++------------------+ +------------------+ +--------------------+
 
 +--------------------------------------------------+
 |                     n8n Workflow                 |
@@ -117,15 +117,17 @@ The backend acts as the single integration layer between:
 
 ## Database (SQLite)
 
-SQLite is used as a lightweight local database for the PoC.
+SQLite is used as a lightweight local database for app-specific metadata.
 
 The database stores:
 
 * journal entries,
-* extracted AI summaries,
-* tasks,
-* blockers,
-* metadata.
+* AI-generated summaries,
+* extracted blockers,
+* automation logs,
+* user preferences.
+
+Tasks and projects are not stored in SQLite. They are owned by Todoist and accessed via the Todoist API.
 
 SQLite was selected because:
 
@@ -190,11 +192,13 @@ Backend sends request to EPAM Dial API
     ↓
 Dial API returns structured JSON
     ↓
-Backend saves:
+Backend saves to SQLite:
     - journal entry
-    - extracted tasks
-    - blockers
-    - summary
+    - AI summary
+    - extracted blockers
+Backend pushes to Todoist API:
+    - new_tasks → created as Todoist tasks
+    - completed_tasks → matching Todoist tasks marked done
     ↓
 Backend returns response to frontend
     ↓
@@ -210,10 +214,11 @@ User sends chat message
     ↓
 React sends POST /api/chat
     ↓
-Backend loads:
-    - current tasks
+Backend loads from Todoist API:
+    - current tasks and projects
+Backend loads from SQLite:
     - recent journal entries
-    - blockers
+    - active blockers
     ↓
 Backend injects context into system prompt
     ↓
@@ -252,7 +257,7 @@ The backend is responsible for:
 * orchestrating AI interactions,
 * prompt construction,
 * persistence logic,
-* task CRUD operations,
+* task CRUD via Todoist API,
 * lightweight contextual memory,
 * error handling,
 * API contracts.
@@ -268,8 +273,8 @@ The backend is responsible for:
 | ChatController    | Context-aware AI chat                |
 | DialService       | Communication with EPAM Dial API     |
 | JournalService    | Journal orchestration/business logic |
-| TaskService       | Task management logic                |
-| AppDbContext      | SQLite persistence via EF Core       |
+| TaskService       | Todoist API integration and task proxy |
+| AppDbContext      | SQLite persistence for app metadata (journal, blockers, logs) |
 
 ---
 

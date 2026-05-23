@@ -37,14 +37,15 @@ The project is built as a Proof of Concept (PoC) for the AI Upskilling Program a
 
 # Tech Stack
 
-| Layer      | Technology                |
-|------------|---------------------------|
-| Frontend   | React + Vite              |
-| Backend    | ASP.NET Core Web API      |
-| Database   | SQLite                    |
-| ORM        | Entity Framework Core     |
-| AI         | EPAM Dial API (planned)   |
-| Automation | n8n                       |
+| Layer           | Technology                        |
+|-----------------|-----------------------------------|
+| Frontend        | React + Vite                      |
+| Backend         | ASP.NET Core Web API              |
+| App metadata DB | SQLite (journal, summaries, logs) |
+| ORM             | Entity Framework Core             |
+| AI              | EPAM Dial API (planned)           |
+| Task management | Todoist API                       |
+| Automation      | n8n                               |
 
 ---
 
@@ -54,10 +55,9 @@ The project is built as a Proof of Concept (PoC) for the AI Upskilling Program a
 React Frontend
        ↓
 ASP.NET Core Web API
-       ↓
-AI Extraction Service (Mock)
-       ↓
-SQLite Database
+       ↓              ↓              ↓
+EPAM Dial API   Todoist API    SQLite Database
+(LLM Gateway)  (Tasks/Projects) (App metadata)
 ```
 
 ```text
@@ -155,13 +155,15 @@ npm run dev
 
 # Database
 
-The project uses SQLite with Entity Framework Core.
+The project uses SQLite with Entity Framework Core for app-specific metadata: journal entries, AI summaries, extracted blockers, and automation logs.
 
 Database file:
 
 ```text
 backend/app.db
 ```
+
+Tasks and projects are not stored in SQLite. They are managed via the Todoist API.
 
 ---
 
@@ -196,8 +198,8 @@ Planned next step:
 
 - Integrate EPAM Dial API
 - Replace mock extraction with real AI processing
-- Add task prioritization and status updates
-- Introduce project/task grouping
+- Add task prioritization and status updates via Todoist API
+- Introduce project/task grouping via Todoist projects
 - Improve frontend task management UI
 
 ## Week 3
@@ -220,7 +222,8 @@ Planned next step:
    - priorities
    - blockers
    - summary
-5. Data is stored in SQLite.
+5. Journal entry and extracted blockers are saved to SQLite.
+   Extracted tasks are created in Todoist via the Todoist API.
 6. Frontend displays extracted tasks.
 
 ---

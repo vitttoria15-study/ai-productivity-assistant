@@ -18,7 +18,7 @@ Display:
 
 ### Task List
 
-Simple list of extracted tasks.
+Displays tasks sourced from the Todoist API via the backend. The frontend does not read task data from SQLite.
 
 No authentication.
 No advanced styling.
