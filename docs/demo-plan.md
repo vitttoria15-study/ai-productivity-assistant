@@ -76,8 +76,9 @@ Show:
 Demonstrate:
 
 * ASP.NET Core Web API initialized,
-* SQLite configured,
-* EPAM Dial API integration prepared or working.
+* SQLite configured for app metadata (journal entries, logs),
+* EPAM Dial API integration prepared or working,
+* Todoist API integration configured.
 
 ---
 
@@ -113,7 +114,8 @@ Backend:
 
 * sends prompt to EPAM Dial API,
 * receives structured JSON,
-* stores extracted information,
+* saves journal entry and extracted blockers to SQLite,
+* creates extracted tasks in Todoist via the Todoist API,
 * returns result to UI.
 
 Example output:
@@ -197,15 +199,15 @@ Transform the prototype into a usable productivity assistant.
 
 # Planned Features
 
-## Task Management
+## Task Management (via Todoist)
 
-Demonstrate:
+Demonstrate task management through the Todoist API:
 
-* create task,
-* edit task,
-* delete task,
-* mark task completed,
-* task prioritization.
+* create task in Todoist,
+* edit task in Todoist,
+* delete task in Todoist,
+* mark task completed in Todoist,
+* task prioritization reflected from Todoist.
 
 ---
 
@@ -353,8 +355,9 @@ Before each demo:
 * prepare demo data,
 * pre-seed several journal entries,
 * test AI prompts,
-* verify API connectivity,
-* verify SQLite persistence,
+* verify EPAM Dial API connectivity,
+* verify Todoist API connectivity and confirm demo tasks are present in Todoist,
+* verify SQLite persistence for journal entries and logs,
 * verify n8n workflow execution,
 * prepare fallback screenshots in case of API/network issues.
 
