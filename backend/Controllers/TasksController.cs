@@ -19,11 +19,13 @@ public class TasksController : ControllerBase
     // ── GET /api/tasks ────────────────────────────────────────────────────────
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? projectId = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var tasks = await _todoist.GetActiveTasksAsync(ct: cancellationToken);
+            var tasks = await _todoist.GetActiveTasksAsync(projectId, ct: cancellationToken);
             return Ok(tasks.Select(ToResponse));
         }
         catch (InvalidOperationException ex)

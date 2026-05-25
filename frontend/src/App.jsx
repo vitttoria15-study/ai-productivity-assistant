@@ -1,104 +1,117 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import Sidebar            from './components/Sidebar';
+import JournalCard        from './components/JournalCard';
+import SummaryCard        from './components/SummaryCard';
+import ProjectsTasksPanel from './components/ProjectsTasksPanel';
+import PlaceholderCard    from './components/PlaceholderCard';
 
 function App() {
-  const [journalText, setJournalText] = useState('');
-  const [summary, setSummary] = useState('');
-  const [tasks, setTasks] = useState([]);
-  const [loadingSummary, setLoadingSummary] = useState(false);
-  const [loadingTasks, setLoadingTasks] = useState(false);
-  const [error, setError] = useState('');
+  const [activeSection, setActiveSection] = useState('dashboard');
+  const [summary,       setSummary]       = useState('');
+  // Incremented after each successful journal submission to trigger a task reload
+  // in ProjectsTasksPanel without callback-threading through intermediate components.
+  const [refreshKey,    setRefreshKey]    = useState(0);
 
-  useEffect(() => {
-    loadTasks();
-  }, []);
-
-  async function loadTasks() {
-    setLoadingTasks(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/tasks');
-      if (!response.ok) {
-        throw new Error('Failed to load tasks.');
-      }
-
-      const data = await response.json();
-      setTasks(data);
-    } catch {
-      setError('Failed to load tasks.');
-    } finally {
-      setLoadingTasks(false);
-    }
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setLoadingSummary(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/journal', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ journalText })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit journal entry.');
-      }
-
-      const data = await response.json();
-      setSummary(data.summary ?? '');
-      setJournalText('');
-      await loadTasks();
-    } catch {
-      setError('Failed to submit journal entry.');
-    } finally {
-      setLoadingSummary(false);
-    }
+  function handleJournalProcessed(newSummary) {
+    setSummary(newSummary);
+    setRefreshKey((k) => k + 1);
   }
 
   return (
-    <main className="app-shell">
-      <section className="card">
-        <h1>AI Productivity Assistant</h1>
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="journal">Journal entry</label>
-          <textarea
-            id="journal"
-            value={journalText}
-            onChange={(event) => setJournalText(event.target.value)}
-            placeholder="Write what you completed, what is blocked, and what needs to happen next."
-            rows="8"
-          />
-          <button type="submit" disabled={loadingSummary || !journalText.trim()}>
-            {loadingSummary ? 'Submitting...' : 'Submit'}
-          </button>
-        </form>
-        {error ? <p className="error">{error}</p> : null}
-      </section>
+    <div className="dashboard-shell">
+      <Sidebar
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+      />
 
-      <section className="card">
-        <h2>Summary</h2>
-        {summary ? <p>{summary}</p> : <p className="muted">No summary yet.</p>}
-      </section>
+      <main className="dashboard-main">
+        {/* Top row: Journal entry + AI extraction result */}
+        <div className="dashboard-top-row">
+          <JournalCard onJournalProcessed={handleJournalProcessed} />
+          <SummaryCard summary={summary} />
+        </div>
 
-      <section className="card">
-        <h2>Tasks</h2>
-        {loadingTasks ? <p className="muted">Loading tasks...</p> : null}
-        {!loadingTasks && tasks.length === 0 ? <p className="muted">No tasks yet.</p> : null}
-        <ul className="task-list">
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <span>{task.title}</span>
-              <span className="status">{task.status}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
+        {/* Center row: Projects & Tasks — primary demo feature, visually dominant */}
+        <ProjectsTasksPanel refreshKey={refreshKey} />
+
+        {/* Bottom row: demo placeholder cards */}
+        <div className="dashboard-bottom-row">
+
+          {/* AI Assistant */}
+          <PlaceholderCard title="AI Assistant">
+            <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              Recommendations based on your journal &amp; tasks
+            </p>
+            <div style={{ background: '#f0f4ff', borderRadius: 8, padding: '10px 14px', marginBottom: 8 }}>
+              <p style={{ fontSize: 13, color: '#4338ca', fontWeight: 500 }}>
+                ✦ Focus on high-priority tasks first
+              </p>
+              <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                3 P1 tasks are overdue — consider addressing them before new work.
+              </p>
+            </div>
+            <div style={{ background: '#f0f4ff', borderRadius: 8, padding: '10px 14px' }}>
+              <p style={{ fontSize: 13, color: '#4338ca', fontWeight: 500 }}>
+                ✦ Schedule a review session
+              </p>
+              <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                Your last journal entry mentioned blockers that haven't been resolved.
+              </p>
+            </div>
+          </PlaceholderCard>
+
+          {/* Daily Summary */}
+          <PlaceholderCard title="Daily Summary">
+            <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              Today's productivity snapshot
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                <p style={{ fontSize: 22, fontWeight: 700, color: '#15803d' }}>3</p>
+                <p style={{ fontSize: 11, color: '#6b7280' }}>Tasks Completed</p>
+              </div>
+              <div style={{ background: '#eff6ff', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                <p style={{ fontSize: 22, fontWeight: 700, color: '#1d4ed8' }}>72%</p>
+                <p style={{ fontSize: 11, color: '#6b7280' }}>Focus Score</p>
+              </div>
+            </div>
+            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+              <p style={{ fontSize: 12, color: '#374151' }}>🏆 Streak: 4 days in a row</p>
+            </div>
+          </PlaceholderCard>
+
+          {/* Recent Activity */}
+          <PlaceholderCard title="Recent Activity">
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { time: '2h ago',    text: 'Journal entry processed',        icon: '✏' },
+                { time: '3h ago',    text: 'Task "Deploy hotfix" completed', icon: '✓' },
+                { time: '5h ago',    text: 'Task "Review PR #42" created',   icon: '+' },
+                { time: 'Yesterday', text: 'Journal entry processed',        icon: '✏' },
+                { time: 'Yesterday', text: '2 tasks moved to Inbox',         icon: '↓' },
+              ].map((item, i) => (
+                <li key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{
+                    width: 22, height: 22, background: '#f3f4f6',
+                    borderRadius: '50%', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 11, flexShrink: 0,
+                  }}>
+                    {item.icon}
+                  </span>
+                  <div>
+                    <span style={{ fontSize: 13, color: '#111827' }}>{item.text}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>
+                      {item.time}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </PlaceholderCard>
+
+        </div>
+      </main>
+    </div>
   );
 }
 

@@ -25,7 +25,7 @@ public class TasksControllerTests
             });
 
         var controller = new TasksController(mock.Object);
-        var result     = await controller.GetAll(CancellationToken.None);
+        var result     = await controller.GetAll(cancellationToken: CancellationToken.None);
 
         var ok    = Assert.IsType<OkObjectResult>(result);
         var tasks = Assert.IsAssignableFrom<IEnumerable<TaskResponse>>(ok.Value).ToList();
@@ -50,7 +50,7 @@ public class TasksControllerTests
             .ThrowsAsync(new InvalidOperationException("Todoist ApiToken is not configured"));
 
         var controller = new TasksController(mock.Object);
-        var result     = await controller.GetAll(CancellationToken.None);
+        var result     = await controller.GetAll(cancellationToken: CancellationToken.None);
 
         var status = Assert.IsType<ObjectResult>(result);
         Assert.Equal(503, status.StatusCode);
@@ -90,5 +90,44 @@ public class TasksControllerTests
         var result     = await controller.Delete("99", CancellationToken.None);
 
         Assert.IsType<NoContentResult>(result);
+    }
+
+    // ── GET /api/tasks?projectId= ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAll_WithProjectId_PassesProjectIdToService()
+    {
+        var mock = MockService();
+        mock.Setup(s => s.GetActiveTasksAsync("proj42", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TodoistTask>
+            {
+                new("1", "Task in proj42", null, "proj42", 1, null, null)
+            });
+
+        var controller = new TasksController(mock.Object);
+        var result = await controller.GetAll("proj42", CancellationToken.None);
+
+        var ok    = Assert.IsType<OkObjectResult>(result);
+        var tasks = Assert.IsAssignableFrom<IEnumerable<TaskResponse>>(ok.Value).ToList();
+        Assert.Single(tasks);
+        mock.Verify(
+            s => s.GetActiveTasksAsync("proj42", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetAll_WithNullProjectId_CallsServiceWithNull()
+    {
+        var mock = MockService();
+        mock.Setup(s => s.GetActiveTasksAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TodoistTask>());
+
+        var controller = new TasksController(mock.Object);
+        var result = await controller.GetAll(null, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        mock.Verify(
+            s => s.GetActiveTasksAsync(null, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }
