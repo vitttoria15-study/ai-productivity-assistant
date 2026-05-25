@@ -3,6 +3,8 @@ using backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+using backend.Services.Todoist;
+using backend.Services.Todoist.Dtos;
 
 namespace backend.Controllers;
 
@@ -19,15 +21,19 @@ public class JournalController : ControllerBase
         Summary = "User worked on project setup."
     };
 
-    private readonly AppDbContext _db;
+    private readonly AppDbContext    _db;
+    private readonly ITodoistService _todoistService;
 
-    public JournalController(AppDbContext db)
+    public JournalController(AppDbContext db, ITodoistService todoistService)
     {
-        _db = db;
+        _db             = db;
+        _todoistService = todoistService;
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] JournalCreateRequest request)
+    public async Task<IActionResult> Create(
+        [FromBody] JournalCreateRequest request,
+        CancellationToken cancellationToken = default)
     {
         var entry = new JournalEntry
         {
@@ -37,20 +43,17 @@ public class JournalController : ControllerBase
         };
 
         _db.JournalEntries.Add(entry);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(cancellationToken);
 
+        // TODO(todoist-api-foundation): priority=1 is a temporary MVP default.
+        //   Replace with AI-extracted priority once the LLM extraction pipeline
+        //   is wired in and MockExtractionResponse is replaced with a real response.
         foreach (var taskTitle in MockResponse.NewTasks)
         {
-            _db.TaskItems.Add(new TaskItem
-            {
-                Title = taskTitle,
-                Status = "todo",
-                CreatedAt = DateTime.UtcNow,
-                JournalEntryId = entry.Id
-            });
+            await _todoistService.CreateTaskAsync(
+                new CreateTaskRequest(taskTitle, null, Priority: 1),
+                cancellationToken);
         }
-
-        await _db.SaveChangesAsync();
 
         return Ok(MockResponse);
     }
