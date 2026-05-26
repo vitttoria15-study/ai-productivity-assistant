@@ -61,6 +61,8 @@ function ProjectsTasksPanel({ refreshKey }) {
   const [loadingTasks,    setLoadingTasks]    = useState(true);
   const [projectsError,   setProjectsError]   = useState('');
   const [tasksError,      setTasksError]      = useState('');
+  const [closingIds,  setClosingIds]  = useState(new Set());  // task IDs with close call in-flight
+  const [closeErrors, setCloseErrors] = useState(new Map());  // task ID → error string
 
   // Client-side filter/sort state — persists across project selection changes.
   const [statusFilter,   setStatusFilter]   = useState('all');
@@ -101,6 +103,33 @@ function ProjectsTasksPanel({ refreshKey }) {
       setTasksError('Could not load tasks.');
     } finally {
       setLoadingTasks(false);
+    }
+  }
+
+  async function closeTask(id) {
+    // Clear any stale error for this task before the new attempt.
+    setCloseErrors((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+    // Mark in-flight so the button shows a spinner and is disabled.
+    setClosingIds((prev) => new Set([...prev, id]));
+
+    try {
+      const res = await fetch(`/api/tasks/${id}/close`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Re-fetch to get the authoritative list from Todoist.
+      await fetchTasks();
+    } catch {
+      setCloseErrors((prev) => new Map([...prev, [id, 'Failed to complete — try again.']]));
+    } finally {
+      // Always clear the in-flight marker, whether success or failure.
+      setClosingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }
 
@@ -295,10 +324,23 @@ function ProjectsTasksPanel({ refreshKey }) {
               <ul className="task-list">
                 {displayedTasks.map((task) => (
                   <li key={task.id} className="task-item">
+                    {task.status !== 'done' && (
+                      <button
+                        className={`task-complete-btn${closingIds.has(task.id) ? ' loading' : ''}`}
+                        aria-label="Complete task"
+                        disabled={closingIds.has(task.id)}
+                        onClick={() => closeTask(task.id)}
+                      />
+                    )}
                     <span className={priorityClass(task.priority)}>
                       {priorityLabel(task.priority)}
                     </span>
-                    <span className="task-content">{task.title}</span>
+                    <span className="task-content">
+                      {task.title}
+                      {closeErrors.get(task.id) && (
+                        <span className="task-error-inline">{closeErrors.get(task.id)}</span>
+                      )}
+                    </span>
                     {task.dueDate && (
                       <span className="task-due">{task.dueDate}</span>
                     )}
