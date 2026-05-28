@@ -43,6 +43,18 @@ public class JournalExtractionService
         _db.JournalEntries.Add(entry);
         await _db.SaveChangesAsync(ct);
 
+        // ── Step 2a: Fetch Todoist projects for task routing (soft failure) ─────
+        IReadOnlyList<TodoistProject>? projects = null;
+        try
+        {
+            projects = await _todoist.GetProjectsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex,
+                "Failed to fetch Todoist projects. Project routing disabled for this extraction.");
+        }
+
         // ── Step 2: Fetch active tasks for context (soft failure) ────────────
         IReadOnlyList<TodoistTask>? activeTasks = null;
         try
@@ -60,7 +72,7 @@ public class JournalExtractionService
         string rawResponse;
         try
         {
-            var (system, user) = BuildPrompt(journalText, activeTasks);
+            var (system, user) = BuildPrompt(journalText, activeTasks, projects);
             rawResponse = await _ai.CompleteAsync(system, user, ct);
         }
         catch (Exception ex)
@@ -87,17 +99,81 @@ public class JournalExtractionService
                 StringComparer.OrdinalIgnoreCase)
             : null;
 
-        foreach (var taskTitle in result!.NewTasks)
+        // ── Build project-name → ID lookup (first match wins for duplicates) ─────
+        var projectLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (projects is not null)
         {
-            try
+            foreach (var proj in projects)
             {
-                await _todoist.CreateTaskAsync(
-                    new CreateTaskRequest(taskTitle, null, Priority: 1), ct);
+                if (!projectLookup.TryAdd(proj.Name, proj.Id))
+                    _log.LogWarning(
+                        "Duplicate Todoist project name '{Name}' (case-insensitive). First match wins.",
+                        proj.Name);
             }
-            catch (Exception ex)
+        }
+
+        // ── Routing guard ─────────────────────────────────────────────────────────
+        var useRoutedPath = result!.RoutedTasks is { Length: > 0 };
+        if (useRoutedPath && result.RoutedTasks!.Length != result.NewTasks.Length)
+        {
+            _log.LogWarning(
+                "routed_tasks length ({RoutedCount}) != new_tasks length ({NewCount}). " +
+                "Falling back to Inbox creation.",
+                result.RoutedTasks.Length, result.NewTasks.Length);
+            useRoutedPath = false;
+        }
+
+        if (useRoutedPath)
+        {
+            for (var i = 0; i < result.NewTasks.Length; i++)
             {
-                _log.LogWarning(ex,
-                    "Failed to create Todoist task '{Title}'. Skipping.", taskTitle);
+                var taskTitle   = result.NewTasks[i];       // authoritative title
+                var routedEntry = result.RoutedTasks![i];   // routing metadata only
+
+                if (routedEntry.Title != taskTitle)
+                    _log.LogWarning(
+                        "routed_tasks[{Index}].Title '{Routed}' != new_tasks[{Index}] '{Original}'. " +
+                        "Using new_tasks title.",
+                        i, routedEntry.Title, i, taskTitle);
+
+                string? projectId = null;
+                if (routedEntry.Project is not null)
+                {
+                    if (projectLookup.TryGetValue(routedEntry.Project, out var pid))
+                        projectId = pid;
+                    else
+                        _log.LogWarning(
+                            "AI selected project '{Name}' which is not in the Todoist project list. " +
+                            "Task will go to Inbox.",
+                            routedEntry.Project);
+                }
+
+                try
+                {
+                    await _todoist.CreateTaskAsync(
+                        new CreateTaskRequest(taskTitle, projectId, Priority: 1), ct);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex,
+                        "Failed to create Todoist task '{Title}'. Skipping.", taskTitle);
+                }
+            }
+        }
+        else
+        {
+            foreach (var taskTitle in result!.NewTasks)
+            {
+                try
+                {
+                    await _todoist.CreateTaskAsync(
+                        new CreateTaskRequest(taskTitle, null, Priority: 1), ct);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex,
+                        "Failed to create Todoist task '{Title}'. Skipping.", taskTitle);
+                }
             }
         }
 
@@ -154,9 +230,10 @@ public class JournalExtractionService
 
     private static (string system, string user) BuildPrompt(
         string journalText,
-        IReadOnlyList<TodoistTask>? activeTasks)
+        IReadOnlyList<TodoistTask>?    activeTasks,
+        IReadOnlyList<TodoistProject>? projects)
     {
-        const string system = """
+        const string systemBase = """
             You are a productivity assistant. Extract structured information from the user's journal entry.
             Return ONLY valid JSON. No markdown. No explanations. No code blocks.
 
@@ -179,7 +256,40 @@ public class JournalExtractionService
             - Return empty arrays if nothing is found. Never omit a field.
             """;
 
+        var hasProjects = projects is { Count: > 0 };
+
+        var systemPrompt = hasProjects
+            ? systemBase + """
+
+                If a list of Todoist project names is provided in the user message, you MUST also
+                return a routed_tasks array. It must have the same length as new_tasks and be in the
+                same order (routed_tasks[i] describes new_tasks[i]). Each item must contain:
+                - "title": the task title, identical to the corresponding entry in new_tasks.
+                - "project": one of the provided project names verbatim, or null if the journal
+                  entry does not clearly name a project for this task.
+                Do NOT invent project names. Only use names from the provided list.
+                Updated schema when projects are provided:
+                {
+                  "completed_tasks": ["string"],
+                  "new_tasks":       ["string"],
+                  "routed_tasks":    [{"title": "string", "project": "string or null"}],
+                  "blockers":        ["string"],
+                  "priorities":      ["string"],
+                  "summary":         "string"
+                }
+                """
+            : systemBase;
+
         var sb = new StringBuilder();
+
+        if (hasProjects)
+        {
+            sb.AppendLine("Available Todoist projects:");
+            foreach (var p in projects!)
+                sb.AppendLine($"- {p.Name}");
+            sb.AppendLine();
+        }
+
         if (activeTasks is { Count: > 0 })
         {
             sb.AppendLine("Active tasks:");
@@ -187,10 +297,11 @@ public class JournalExtractionService
                 sb.AppendLine($"- {t.Content}");
             sb.AppendLine();
         }
+
         sb.AppendLine("Journal entry:");
         sb.Append(journalText);
 
-        return (system, sb.ToString());
+        return (systemPrompt, sb.ToString());
     }
 
     // ── Error response helpers ────────────────────────────────────────────────

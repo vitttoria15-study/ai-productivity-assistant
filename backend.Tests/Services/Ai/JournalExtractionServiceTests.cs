@@ -192,4 +192,279 @@ public class JournalExtractionServiceTests : IDisposable
                 default),
             Times.Once);
     }
+
+    // ── Project-aware prompt injection ─────────────────────────────────────
+
+    [Fact]
+    public async Task ExtractAsync_WithProjects_InjectsProjectNamesIntoUserMessage()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ReturnsAsync(new List<TodoistProject>
+            {
+                new("work-id", "Work", "blue", 1, false),
+                new("personal-id", "Personal", "green", 2, false),
+            });
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+
+        string capturedUser = string.Empty;
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .Callback<string, string, CancellationToken>((_, user, _) => capturedUser = user)
+            .ReturnsAsync("""
+                {"completed_tasks":[],"new_tasks":[],"blockers":[],"priorities":[],"summary":""}
+                """);
+
+        var svc = BuildService();
+        await svc.ExtractAsync("Quick journal entry.");
+
+        Assert.Contains("Available Todoist projects:", capturedUser);
+        Assert.Contains("- Work", capturedUser);
+        Assert.Contains("- Personal", capturedUser);
+    }
+
+    // ── Routing: matched project ────────────────────────────────────────────
+
+    [Fact]
+    public async Task ExtractAsync_RoutedTasksWithMatchingProject_CreatesTaskInProject()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ReturnsAsync(new List<TodoistProject>
+            {
+                new("work-id", "Work", "blue", 1, false),
+                new("personal-id", "Personal", "green", 2, false),
+            });
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync("""
+                {
+                  "completed_tasks": [],
+                  "new_tasks": ["Write spec"],
+                  "routed_tasks": [{"title": "Write spec", "project": "Work"}],
+                  "blockers": [],
+                  "priorities": [],
+                  "summary": "Worked on spec."
+                }
+                """);
+        _todoistMock
+            .Setup(s => s.CreateTaskAsync(It.IsAny<CreateTaskRequest>(), default))
+            .ReturnsAsync(new TodoistTask("id1", "Write spec", null, "work-id", 1, null, null));
+
+        var svc = BuildService();
+        var result = await svc.ExtractAsync("Worked on spec for Work project.");
+
+        Assert.Equal("ok", result.ExtractionStatus);
+        _todoistMock.Verify(
+            s => s.CreateTaskAsync(
+                It.Is<CreateTaskRequest>(r => r.Content == "Write spec" && r.ProjectId == "work-id"),
+                default),
+            Times.Once);
+    }
+
+    // ── Routing: unknown project → Inbox ────────────────────────────────────
+
+    [Fact]
+    public async Task ExtractAsync_RoutedTasksWithUnknownProject_FallsBackToInbox()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ReturnsAsync(new List<TodoistProject>
+            {
+                new("work-id", "Work", "blue", 1, false),
+            });
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync("""
+                {
+                  "completed_tasks": [],
+                  "new_tasks": ["Buy milk"],
+                  "routed_tasks": [{"title": "Buy milk", "project": "Shopping"}],
+                  "blockers": [],
+                  "priorities": [],
+                  "summary": "Grocery run needed."
+                }
+                """);
+        _todoistMock
+            .Setup(s => s.CreateTaskAsync(It.IsAny<CreateTaskRequest>(), default))
+            .ReturnsAsync(new TodoistTask("id1", "Buy milk", null, "inbox-id", 1, null, null));
+
+        var svc = BuildService();
+        var result = await svc.ExtractAsync("Need to buy milk.");
+
+        Assert.Equal("ok", result.ExtractionStatus);
+        _todoistMock.Verify(
+            s => s.CreateTaskAsync(
+                It.Is<CreateTaskRequest>(r => r.Content == "Buy milk" && r.ProjectId == null),
+                default),
+            Times.Once);
+    }
+
+    // ── Routing: routed_tasks absent → fallback ─────────────────────────────
+
+    [Fact]
+    public async Task ExtractAsync_RoutedTasksAbsent_FallsBackToNewTasksInbox()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ReturnsAsync(new List<TodoistProject>
+            {
+                new("work-id", "Work", "blue", 1, false),
+            });
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync("""
+                {
+                  "completed_tasks": [],
+                  "new_tasks": ["Deploy service"],
+                  "blockers": [],
+                  "priorities": [],
+                  "summary": "Planning deployment."
+                }
+                """);
+        _todoistMock
+            .Setup(s => s.CreateTaskAsync(It.IsAny<CreateTaskRequest>(), default))
+            .ReturnsAsync(new TodoistTask("id1", "Deploy service", null, "inbox-id", 1, null, null));
+
+        var svc = BuildService();
+        var result = await svc.ExtractAsync("Need to deploy service.");
+
+        Assert.Equal("ok", result.ExtractionStatus);
+        _todoistMock.Verify(
+            s => s.CreateTaskAsync(
+                It.Is<CreateTaskRequest>(r => r.Content == "Deploy service" && r.ProjectId == null),
+                default),
+            Times.Once);
+    }
+
+    // ── Routing: count mismatch → fallback ──────────────────────────────────
+
+    [Fact]
+    public async Task ExtractAsync_RoutedTasksCountMismatch_FallsBackToInbox()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ReturnsAsync(new List<TodoistProject>
+            {
+                new("work-id", "Work", "blue", 1, false),
+            });
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync("""
+                {
+                  "completed_tasks": [],
+                  "new_tasks": ["Task A", "Task B"],
+                  "routed_tasks": [{"title": "Task A", "project": "Work"}],
+                  "blockers": [],
+                  "priorities": [],
+                  "summary": "Two tasks."
+                }
+                """);
+        _todoistMock
+            .Setup(s => s.CreateTaskAsync(It.IsAny<CreateTaskRequest>(), default))
+            .ReturnsAsync(new TodoistTask("id1", "Task A", null, "inbox-id", 1, null, null));
+
+        var svc = BuildService();
+        var result = await svc.ExtractAsync("Need to do Task A and Task B.");
+
+        Assert.Equal("ok", result.ExtractionStatus);
+        _todoistMock.Verify(
+            s => s.CreateTaskAsync(
+                It.Is<CreateTaskRequest>(r => r.ProjectId == null),
+                default),
+            Times.Exactly(2));
+    }
+
+    // ── Routing: projects fetch fails → Inbox ───────────────────────────────
+
+    [Fact]
+    public async Task ExtractAsync_ProjectsFetchFails_CreatesTasksInInbox()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ThrowsAsync(new HttpRequestException("Todoist unavailable"));
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync("""
+                {
+                  "completed_tasks": [],
+                  "new_tasks": ["Write report"],
+                  "blockers": [],
+                  "priorities": [],
+                  "summary": "Writing report."
+                }
+                """);
+        _todoistMock
+            .Setup(s => s.CreateTaskAsync(It.IsAny<CreateTaskRequest>(), default))
+            .ReturnsAsync(new TodoistTask("id1", "Write report", null, "inbox-id", 1, null, null));
+
+        var svc = BuildService();
+        var result = await svc.ExtractAsync("Need to write report.");
+
+        Assert.Equal("ok", result.ExtractionStatus);
+        _todoistMock.Verify(
+            s => s.CreateTaskAsync(
+                It.Is<CreateTaskRequest>(r => r.Content == "Write report" && r.ProjectId == null),
+                default),
+            Times.Once);
+    }
+
+    // ── Routing: duplicate project names → first match wins ─────────────────
+
+    [Fact]
+    public async Task ExtractAsync_DuplicateProjectNames_UsesFirstMatch()
+    {
+        _todoistMock
+            .Setup(s => s.GetProjectsAsync(default))
+            .ReturnsAsync(new List<TodoistProject>
+            {
+                new("work-id-1", "Work",  "blue",  1, false),
+                new("work-id-2", "WORK",  "green", 2, false),
+            });
+        _todoistMock
+            .Setup(s => s.GetActiveTasksAsync(null, default))
+            .ReturnsAsync(new List<TodoistTask>());
+        _aiMock
+            .Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync("""
+                {
+                  "completed_tasks": [],
+                  "new_tasks": ["Write spec"],
+                  "routed_tasks": [{"title": "Write spec", "project": "Work"}],
+                  "blockers": [],
+                  "priorities": [],
+                  "summary": "Spec work."
+                }
+                """);
+        _todoistMock
+            .Setup(s => s.CreateTaskAsync(It.IsAny<CreateTaskRequest>(), default))
+            .ReturnsAsync(new TodoistTask("id1", "Write spec", null, "work-id-1", 1, null, null));
+
+        var svc = BuildService();
+        var result = await svc.ExtractAsync("Write spec for Work.");
+
+        Assert.Equal("ok", result.ExtractionStatus);
+        _todoistMock.Verify(
+            s => s.CreateTaskAsync(
+                It.Is<CreateTaskRequest>(r => r.Content == "Write spec" && r.ProjectId == "work-id-1"),
+                default),
+            Times.Once);
+    }
 }

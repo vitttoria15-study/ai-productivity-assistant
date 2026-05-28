@@ -104,4 +104,105 @@ public class ExtractionValidatorTests
         Assert.Empty(result!.CompletedTasks);
         Assert.Equal(string.Empty, result.Summary);
     }
+
+    // ── RoutedTasks — structural deserialization ────────────────────────────
+
+    [Fact]
+    public void TryParse_RoutedTasksAbsent_ReturnsTrue()
+    {
+        const string json = """
+            {"completed_tasks":[],"new_tasks":["Task A"],"blockers":[],"priorities":[],"summary":""}
+            """;
+
+        var ok = ExtractionValidator.TryParse(json, out var result, out _);
+
+        Assert.True(ok);
+        Assert.Null(result!.RoutedTasks);
+    }
+
+    [Fact]
+    public void TryParse_RoutedTasksPresent_Valid_ReturnsTrue()
+    {
+        const string json = """
+            {
+              "completed_tasks": [],
+              "new_tasks": ["Buy milk"],
+              "routed_tasks": [{"title": "Buy milk", "project": "Shopping"}],
+              "blockers": [],
+              "priorities": [],
+              "summary": ""
+            }
+            """;
+
+        var ok = ExtractionValidator.TryParse(json, out var result, out _);
+
+        Assert.True(ok);
+        Assert.NotNull(result!.RoutedTasks);
+        Assert.Single(result.RoutedTasks!);
+        Assert.Equal("Buy milk", result.RoutedTasks![0].Title);
+        Assert.Equal("Shopping", result.RoutedTasks[0].Project);
+    }
+
+    [Fact]
+    public void TryParse_RoutedTasksProjectNull_ReturnsTrue()
+    {
+        const string json = """
+            {
+              "completed_tasks": [],
+              "new_tasks": ["Write report"],
+              "routed_tasks": [{"title": "Write report", "project": null}],
+              "blockers": [],
+              "priorities": [],
+              "summary": ""
+            }
+            """;
+
+        var ok = ExtractionValidator.TryParse(json, out _, out _);
+
+        Assert.True(ok);
+    }
+
+    // ── RoutedTasks — length validation ────────────────────────────────────
+
+    [Fact]
+    public void TryParse_RoutedTasksTitleExceeds500Chars_ReturnsFalse()
+    {
+        var longTitle = new string('x', 501);
+        var json = $$"""
+            {
+              "completed_tasks": [],
+              "new_tasks": ["ok"],
+              "routed_tasks": [{"title": "{{longTitle}}", "project": null}],
+              "blockers": [],
+              "priorities": [],
+              "summary": ""
+            }
+            """;
+
+        var ok = ExtractionValidator.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void TryParse_RoutedTasksProjectExceeds200Chars_ReturnsFalse()
+    {
+        var longProject = new string('x', 201);
+        var json = $$"""
+            {
+              "completed_tasks": [],
+              "new_tasks": ["ok"],
+              "routed_tasks": [{"title": "ok", "project": "{{longProject}}"}],
+              "blockers": [],
+              "priorities": [],
+              "summary": ""
+            }
+            """;
+
+        var ok = ExtractionValidator.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.NotNull(error);
+    }
 }
