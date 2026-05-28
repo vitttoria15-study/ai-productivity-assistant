@@ -68,6 +68,7 @@ switch (aiProvider)
 }
 
 builder.Services.AddScoped<JournalExtractionService>();
+builder.Services.AddScoped<AiDiagnosticsService>();   // ← health-check probe
 
 // ── Build ─────────────────────────────────────────────────────────────────
 var app = builder.Build();
