@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 
 namespace backend.Services.Ai.Providers;
@@ -16,8 +15,7 @@ public class DialAuthHandler : DelegatingHandler
         HttpRequestMessage request, CancellationToken ct)
     {
         if (!string.IsNullOrEmpty(_apiKey))
-            request.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", _apiKey);
+            request.Headers.TryAddWithoutValidation("Api-Key", _apiKey);
         return base.SendAsync(request, ct);
     }
 }
