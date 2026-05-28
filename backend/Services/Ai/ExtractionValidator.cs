@@ -72,6 +72,27 @@ public static class ExtractionValidator
             return false;
         }
 
+        if (result.RoutedTasks is not null)
+        {
+            const int maxProjectLength = 200;
+            foreach (var task in result.RoutedTasks)
+            {
+                if (task.Title is null || task.Title.Length > MaxItemLength)
+                {
+                    error = $"AI response contains a routed_tasks title that is null or " +
+                            $"exceeds {MaxItemLength} characters.";
+                    return false;
+                }
+
+                if (task.Project is not null && task.Project.Length > maxProjectLength)
+                {
+                    error = $"AI response contains a routed_tasks project name exceeding " +
+                            $"{maxProjectLength} characters.";
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 }
