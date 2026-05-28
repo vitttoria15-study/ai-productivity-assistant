@@ -87,13 +87,10 @@ if (string.IsNullOrWhiteSpace(todoistOpts.ApiToken))
     startupLogger.LogWarning("Todoist ApiToken is not configured. Task endpoints will return 503.");
 
 var aiOpts = app.Services.GetRequiredService<IOptions<AiOptions>>().Value;
-if (aiOpts.Provider.Equals("dial", StringComparison.OrdinalIgnoreCase)
-    && string.IsNullOrWhiteSpace(aiOpts.Dial.ApiKey))
+var (aiConfigured, aiMissingReason) = AiProviderConfigValidator.Check(aiOpts);
+if (!aiConfigured)
     startupLogger.LogWarning(
-        "Ai:Dial:ApiKey is not configured. " +
-        "Set it via 'dotnet user-secrets set \"Ai:Dial:ApiKey\" \"sk-...\"' " +
-        "or the Ai__Dial__ApiKey environment variable. " +
-        "DIAL provider will fail at runtime.");
+        "AI provider misconfigured at startup: {Reason}", aiMissingReason);
 
 // ── HTTP pipeline ─────────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
