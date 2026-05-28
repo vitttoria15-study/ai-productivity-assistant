@@ -10,9 +10,10 @@ public class AppDbContext : DbContext
     {
     }
 
-    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
-    public DbSet<TaskItem> TaskItems => Set<TaskItem>();
-    public DbSet<AutomationLog> AutomationLogs => Set<AutomationLog>();
+    public DbSet<JournalEntry>     JournalEntries    => Set<JournalEntry>();
+    public DbSet<TaskItem>         TaskItems         => Set<TaskItem>();
+    public DbSet<AutomationLog>    AutomationLogs    => Set<AutomationLog>();
+    public DbSet<ExtractedBlocker> ExtractedBlockers => Set<ExtractedBlocker>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,5 +21,10 @@ public class AppDbContext : DbContext
             .HasMany(j => j.TaskItems)
             .WithOne(t => t.JournalEntry)
             .HasForeignKey(t => t.JournalEntryId);
+
+        modelBuilder.Entity<JournalEntry>()
+            .HasMany(j => j.ExtractedBlockers)
+            .WithOne(b => b.JournalEntry)
+            .HasForeignKey(b => b.JournalEntryId);
     }
 }

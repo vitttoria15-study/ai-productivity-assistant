@@ -1,17 +1,22 @@
 using backend.Data;
+using backend.Services.Ai;
+using backend.Services.Ai.Providers;
 using backend.Services.Todoist;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
+// ── Controllers + Swagger ─────────────────────────────────────────────────
 builder.Services.AddControllers();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-// ── Todoist ───────────────────────────────────────────────────────────────────
+// ── SQLite / EF Core ──────────────────────────────────────────────────────
+builder.Services.AddDbContext<AppDbContext>(opts =>
+    opts.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// ── Todoist ───────────────────────────────────────────────────────────────
 builder.Services.Configure<TodoistOptions>(
     builder.Configuration.GetSection(TodoistOptions.SectionName));
 
@@ -21,32 +26,74 @@ builder.Services
     {
         var baseUrl = builder.Configuration["Todoist:BaseUrl"]
                       ?? "https://api.todoist.com/api/v1";
-        // Ensure trailing slash so relative paths resolve correctly
         client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
     })
     .AddHttpMessageHandler<TodoistAuthHandler>();
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// ── AI provider ───────────────────────────────────────────────────────────
+builder.Services.Configure<AiOptions>(
+    builder.Configuration.GetSection(AiOptions.SectionName));
 
-var app = builder.Build();
+var aiProvider = (builder.Configuration["Ai:Provider"] ?? "mock")
+    .Trim().ToLowerInvariant();
 
-using var scope = app.Services.CreateScope();
-var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-db.Database.EnsureCreated();
-
-// ── Startup warning for missing Todoist token ─────────────────────────────────
-var todoistOpts = app.Services.GetRequiredService<IOptions<TodoistOptions>>().Value;
-if (string.IsNullOrWhiteSpace(todoistOpts.ApiToken))
+switch (aiProvider)
 {
-    var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
-    var startupLogger = loggerFactory.CreateLogger("Startup");
-    startupLogger.LogWarning(
-        "Todoist ApiToken is not configured. Task endpoints will return 503.");
+    case "dial":
+        builder.Services
+            .AddTransient<DialAuthHandler>()
+            .AddHttpClient<IAiProvider, DialAiProvider>()
+            .AddHttpMessageHandler<DialAuthHandler>();
+        break;
+
+    case "ollama":
+        builder.Services
+            .AddHttpClient<IAiProvider, OllamaProvider>(client =>
+            {
+                var endpoint = builder.Configuration["Ai:Ollama:Endpoint"]
+                               ?? "http://localhost:11434";
+                client.BaseAddress = new Uri(endpoint.TrimEnd('/') + "/");
+            });
+        break;
+
+    case "mock":
+        builder.Services.AddSingleton<IAiProvider, MockAiProvider>();
+        break;
+
+    default:
+        throw new InvalidOperationException(
+            $"Unknown AI provider '{aiProvider}'. " +
+            "Valid values: dial, ollama, mock. " +
+            "Set 'Ai:Provider' in appsettings.json.");
 }
 
-// Configure the HTTP request pipeline.
+builder.Services.AddScoped<JournalExtractionService>();
+builder.Services.AddScoped<AiDiagnosticsService>();   // ← health-check probe
+
+// ── Build ─────────────────────────────────────────────────────────────────
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
+
+// ── Startup warnings ──────────────────────────────────────────────────────
+var logFac        = app.Services.GetRequiredService<ILoggerFactory>();
+var startupLogger = logFac.CreateLogger("Startup");
+
+var todoistOpts = app.Services.GetRequiredService<IOptions<TodoistOptions>>().Value;
+if (string.IsNullOrWhiteSpace(todoistOpts.ApiToken))
+    startupLogger.LogWarning("Todoist ApiToken is not configured. Task endpoints will return 503.");
+
+var aiOpts = app.Services.GetRequiredService<IOptions<AiOptions>>().Value;
+var (aiConfigured, aiMissingReason) = AiProviderConfigValidator.Check(aiOpts);
+if (!aiConfigured)
+    startupLogger.LogWarning(
+        "AI provider misconfigured at startup: {Reason}", aiMissingReason);
+
+// ── HTTP pipeline ─────────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -54,9 +101,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();

@@ -672,3 +672,13 @@ body {
   color: #ef4444;
   margin-top: 2px;
 }
+
+/* ── AI extraction warning ─────────────────────────────────────────────── */
+.extraction-warning {
+  font-size: 13px;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 10px;
+}

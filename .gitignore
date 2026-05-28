@@ -51,3 +51,5 @@ ollama.log
 .agents/memory/sdlc/daily/
 docs/superpowers/runs/
 docs/superpowers/tasks/*/.state.json
+# Claude local settings
+.claude/settings.local.json
