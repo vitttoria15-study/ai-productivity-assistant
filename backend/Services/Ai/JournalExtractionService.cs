@@ -167,7 +167,7 @@ public class JournalExtractionService
                 try
                 {
                     await _todoist.CreateTaskAsync(
-                        new CreateTaskRequest(taskTitle, null, Priority: 1), ct);
+                        new CreateTaskRequest(taskTitle, null, Priority: 4), ct);
                 }
                 catch (Exception ex)
                 {
